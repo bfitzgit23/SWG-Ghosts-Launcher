@@ -37,6 +37,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const minimizeToTrayCheckbox = document.getElementById('minimize-to-tray-checkbox');
   const timeoutInput = document.getElementById('timeout-input');
   const saveSettingsButton = document.getElementById('save-settings');
+  const resetSettingsButton = document.getElementById('reset-settings');
+  const settingsStatus = document.getElementById('settings-status');
 
   // State
   let isScanning = false;
@@ -151,6 +153,15 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function resetSettings() {
+    scanModeSelect.value = 'quick';
+    autoLaunchCheckbox.checked = false;
+    autoUpdateCheckbox.checked = false;
+    minimizeToTrayCheckbox.checked = false;
+    timeoutInput.value = 30;
+    settingsStatus.textContent = 'Defaults restored. Click SAVE SETTINGS to apply.';
+  }
+
   async function saveSettings() {
     try {
       const settings = {
@@ -163,13 +174,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
       await ipcRenderer.invoke('save-settings', settings);
       updateStatus('Settings saved successfully');
-      closeSettingsModal();
+      settingsStatus.textContent = 'Settings saved successfully.';
+      setTimeout(closeSettingsModal, 450);
     } catch (error) {
       updateStatus(`Failed to save settings: ${error.message}`);
     }
   }
 
   saveSettingsButton.addEventListener('click', saveSettings);
+  resetSettingsButton.addEventListener('click', resetSettings);
 
   // ------------------------------
   // Install Directory
@@ -235,7 +248,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     try {
       updateStatus(`Launching ${foundExeName}...`);
-      await ipcRenderer.invoke('launch-game', exePath);
+      await ipcRenderer.invoke('launch-game', exePath, installDir);
       updateStatus(`${foundExeName} launched successfully`);
     } catch (error) {
       updateStatus(`Launch failed: ${error.message}`);

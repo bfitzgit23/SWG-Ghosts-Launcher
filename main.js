@@ -369,7 +369,7 @@ ipcMain.handle('select-file', async () => {
 // ------------------------------
 // Launch game
 // ------------------------------
-ipcMain.handle('launch-game', async (event, exePath) => {
+ipcMain.handle('launch-game', async (event, exePath, installDir = null) => {
   return new Promise((resolve, reject) => {
     if (!exePath || typeof exePath !== 'string') {
       reject(new Error('Invalid executable path'));
@@ -382,31 +382,70 @@ ipcMain.handle('launch-game', async (event, exePath) => {
     }
 
     try {
-      const exeDir = path.dirname(exePath);
-      const exeName = path.basename(exePath);
       const { spawn } = require('child_process');
+      const exeName = path.basename(exePath);
+      const exeDir = path.dirname(exePath);
+
+      // SWGEmu should be launched as a normal Windows process, not through
+      // cmd.exe. shell:true can change quoting, environment handling, and
+      // the process working directory compared with launching SWGEmu.exe
+      // directly from Explorer/a shortcut.
+      //
+      // Prefer the launcher's selected SWG installation directory because
+      // SWG client files/configuration are normally resolved relative to it.
+      // If it is unavailable, fall back to the executable's directory.
+      let workingDirectory = exeDir;
+
+      if (installDir && typeof installDir === 'string') {
+        try {
+          if (fs.existsSync(installDir) && fs.statSync(installDir).isDirectory()) {
+            workingDirectory = path.resolve(installDir);
+          }
+        } catch (_) {
+          // Keep exeDir fallback.
+        }
+      }
+
+      console.log('----------------------------------------');
+      console.log('SWG GHOSTS GAME LAUNCH');
+      console.log('Executable :', exePath);
+      console.log('Working Dir:', workingDirectory);
+      console.log('Shell      : false');
+      console.log('----------------------------------------');
 
       const gameProcess = spawn(exePath, [], {
+        cwd: workingDirectory,
         detached: true,
         stdio: 'ignore',
-        cwd: exeDir,
-        shell: true,
-        windowsHide: false
+        shell: false,
+        windowsHide: false,
+        windowsVerbatimArguments: false
       });
 
-      gameProcess.on('error', (err) => { console.error('Launch failed:', err); });
+      let settled = false;
+
+      gameProcess.once('error', (err) => {
+        console.error('SWG launch failed:', err);
+        if (!settled) {
+          settled = true;
+          reject(new Error(`Unable to launch ${exeName}: ${err.message}`));
+        }
+      });
+
       gameProcess.unref();
 
       if (gameProcess.pid) {
+        settled = true;
         resolve({
           success: true,
           pid: gameProcess.pid,
+          executable: exePath,
+          workingDirectory,
           message: `${exeName} launched successfully`
         });
-      } else {
-        reject(new Error('Failed to launch process'));
       }
     } catch (error) {
+      console.error('Failed to launch SWG:', error);
       reject(new Error(`Failed to launch game: ${error.message}`));
     }
   });
