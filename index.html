@@ -178,8 +178,8 @@
     }
 
     .paypal-donate {
-      background: linear-gradient(to bottom, #0070ba, #003087);
-      border: 1px solid #003087;
+      background: linear-gradient(to bottom, #0B4D70, #062238);
+      border: 1px solid #35C8FF;
       color: white;
       padding: 10px 16px;
       width: 200px;
@@ -196,9 +196,9 @@
       font-weight: bold;
     }
     .paypal-donate:hover {
-      background: linear-gradient(to bottom, #0090fa, #0050c7);
+      background: linear-gradient(to bottom, #159DDD, #0874AD);
       transform: translateY(-1px);
-      box-shadow: 0 5px 15px rgba(0, 80, 199, 0.3);
+      box-shadow: 0 5px 15px rgba(53, 200, 255, 0.28);
     }
     .paypal-icon { font-weight: bold; font-size: 16px; }
 
@@ -217,28 +217,54 @@
 
     .progress-bar {
       height: 18px;
-      background: rgba(0,0,0,.7);
+      background: linear-gradient(180deg, rgba(2,8,14,.92), rgba(5,16,27,.92));
+      border: 1px solid rgba(53,200,255,.28);
       border-radius: 10px;
       overflow: hidden;
       margin: 8px 0;
+      box-shadow:
+        inset 0 1px 4px rgba(0,0,0,.75),
+        0 0 8px rgba(30,167,255,.08);
     }
 
     .progress-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, var(--primary), var(--primary-bright));
+      background:
+        linear-gradient(180deg, #8BE7FF 0%, #35C8FF 38%, #0874AD 100%);
+      border-right: 1px solid rgba(210,248,255,.9);
+      box-shadow:
+        0 0 8px rgba(53,200,255,.72),
+        0 0 18px rgba(30,167,255,.38);
+      position: relative;
       transition: width 0.3s ease;
+    }
+
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        135deg,
+        rgba(255,255,255,.14) 0px,
+        rgba(255,255,255,.14) 6px,
+        rgba(255,255,255,0) 6px,
+        rgba(255,255,255,0) 12px
+      );
+      opacity: .45;
+      pointer-events: none;
     }
 
     .status-text {
       text-align: center;
       font-size: 14px;
-      color: var(--primary);
+      color: var(--primary-bright);
+      text-shadow: 0 0 8px rgba(53,200,255,.25);
     }
 
     #current-directory {
       font-size: 12px;
-      color: #aaa;
+      color: #8FAABD;
       word-break: break-all;
       text-align: center;
       margin-top: 5px;
@@ -461,7 +487,7 @@
       margin-top: 10px;
       min-height: 15px;
       text-align: center;
-      color: #62D7FF;
+      color: #66D9FF;
       font-size: 10px;
     }
   </style>
