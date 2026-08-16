@@ -1,6 +1,6 @@
 {
   "address": "51.81.81.116",
   "port": "44453",
-  "manifestUrl": "https://51.81.81.116/tre/required-files.json",
-  "baseUrl": "https://51.81.81.116/tre/"
+  "manifestUrl": "https://51-81-81-116.sslip.io/tre/required-files.json",
+  "baseUrl": "https://51-81-81-116.sslip.io/tre/"
 }

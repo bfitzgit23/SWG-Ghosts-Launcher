@@ -375,7 +375,7 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       const url = (file.url && file.url.startsWith('http'))
         ? file.url
-        : `https://51.81.81.116/tre/${file.name}`;
+        : `https://51-81-81-116.sslip.io/tre/${file.name}`;
 
       await ipcRenderer.invoke('download-file', {
         url,
