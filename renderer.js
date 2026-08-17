@@ -373,9 +373,16 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatus(`Downloading: ${file.name}`);
 
     try {
-      const url = (file.url && file.url.startsWith('http'))
-        ? file.url
-        : `https://51-81-81-116.sslip.io/tre/${file.name}`;
+      // Always build the download URL from the current Ghosts HTTPS TRE host.
+      // The manifest may still contain legacy manifest/IP URLs, so never trust
+      // item.url for the actual download destination.
+      const relativeName = String(file.name || '')
+        .replace(/\\/g, '/')
+        .split('/')
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join('/');
+      const url = `https://51-81-81-116.sslip.io/tre/${relativeName}`;
 
       await ipcRenderer.invoke('download-file', {
         url,

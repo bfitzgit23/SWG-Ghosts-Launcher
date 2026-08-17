@@ -294,8 +294,32 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, s
         file.on('finish', () => {
           file.close();
 
+          // Never accept an empty/partial download as successful.
+          // This protects the client from creating 0 KB files when the
+          // manifest may contain a stale URL or the web server responds with an
+          // empty response.
+          let actualSize = 0;
+          try {
+            actualSize = fs.statSync(destination).size;
+          } catch (statError) {
+            reject(statError);
+            return;
+          }
+
+          if (actualSize <= 0) {
+            try { fs.unlinkSync(destination); } catch (_) {}
+            reject(new Error(`Server returned an empty file (0 bytes): ${requestUrl}`));
+            return;
+          }
+
+          if (Number.isFinite(Number(size)) && Number(size) > 0 && actualSize !== Number(size)) {
+            try { fs.unlinkSync(destination); } catch (_) {}
+            reject(new Error(`Size mismatch: expected ${size} bytes, got ${actualSize}`));
+            return;
+          }
+
           if (!expectedMd5) {
-            resolve({ path: destination });
+            resolve({ path: destination, size: actualSize });
             return;
           }
 
