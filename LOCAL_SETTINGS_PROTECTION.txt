@@ -1,0 +1,11 @@
+SWG GHOSTS LAUNCHER
+Local settings protection
+========================
+
+The launcher never overwrites these player/machine settings:
+  options.cfg
+  user.cfg
+  swgemu_machineoptions.iff
+
+They remain local even if an old required-files.json lists them.
+Server/TRE files continue to update normally.

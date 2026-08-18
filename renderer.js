@@ -305,6 +305,21 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatus('Opening PayPal donation page...');
   });
 
+
+  // These files contain per-player/per-machine settings and must NEVER be
+  // overwritten by launcher patching. They are deliberately local-only.
+  const PROTECTED_LOCAL_SETTINGS = new Set([
+    'options.cfg',
+    'user.cfg',
+    'swgemu_machineoptions.iff'
+  ]);
+
+  function isProtectedLocalSetting(fileName) {
+    const normalized = String(fileName || '').replace(/\\/g, '/').toLowerCase();
+    const base = normalized.split('/').pop();
+    return PROTECTED_LOCAL_SETTINGS.has(base);
+  }
+
   async function startScan(mode) {
     if (isScanning) return updateStatus('Scan already in progress');
 
@@ -339,6 +354,15 @@ window.addEventListener('DOMContentLoaded', () => {
         updateStatus(`Checking: ${file.name}`);
         updateProgress(i + 1, files.length, 'total');
 
+        // Never replace the user's game settings, even if an old/stale
+        // required-files.json accidentally lists them.
+        if (isProtectedLocalSetting(file.name) && fs.existsSync(localPath)) {
+          verifiedCount++;
+          updateProgress(100, 100, 'file');
+          updateStatus(`Preserved local settings: ${file.name}`);
+          continue;
+        }
+
         if (fs.existsSync(localPath)) {
           try {
             const localMd5 = await ipcRenderer.invoke('check-md5', localPath);
@@ -370,6 +394,11 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   async function downloadFile(file, destination) {
+    if (isProtectedLocalSetting(file.name) && fs.existsSync(destination)) {
+      updateStatus(`Preserved local settings: ${file.name}`);
+      return true;
+    }
+
     updateStatus(`Downloading: ${file.name}`);
 
     try {
