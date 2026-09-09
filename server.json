@@ -2,17 +2,17 @@
   "address": "212.28.185.14",
   "port": "44453",
   "precu": {
-    "manifestUrl": "https://212-28-185-14.sslip.io/tre/required-files.json",
-    "baseUrl": "https://212-28-185-14.sslip.io/tre/"
+    "manifestUrl": "https://212.28.185.14.sslip.io/tre/required-files.json",
+    "baseUrl": "https://212.28.185.14.sslip.io/tre/"
   },
   "nge": {
-    "manifestUrl": "https://212-28-185-14.sslip.io/tre/nge/required-files.json",
-    "baseUrl": "https://212-28-185-14.sslip.io/tre/nge/"
+    "manifestUrl": "https://212.28.185.14.sslip.io/tre/nge/required-files.json",
+    "baseUrl": "https://212.28.185.14.sslip.io/tre/nge/"
   },
   "launcherVersion": "1.9.1",
   "enhancedGraphics": {
     "enabledPerInstallation": true,
-    "sourceBaseUrl": "https://212-28-185-14.sslip.io/tre/",
+    "sourceBaseUrl": "https://212.28.185.14.sslip.io/tre/",
     "paths": [
       "ui/",
       "*.dat"

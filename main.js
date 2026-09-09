@@ -16,8 +16,8 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 let mainWindow;
 
 // Keep ONE source of truth for your patch base
-const PRECU_BASE_URL = 'https://212-28-185-14.sslip.io/tre/';
-const NGE_BASE_URL = 'https://212-28-185-14.sslip.io/tre/nge/';
+const PRECU_BASE_URL = 'https://212.28.185.14.sslip.io/tre/';
+const NGE_BASE_URL = 'https://212.28.185.14.sslip.io/tre/nge/';
 const PRECU_TESTCENTER_LOGIN_IP = '212.28.185.14';
 
 function toggleFullscreen(win) {
