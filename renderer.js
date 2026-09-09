@@ -14,6 +14,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const quickScanButton = document.getElementById('quick-scan');
   const fullScanButton = document.getElementById('full-scan');
   const installLocationButton = document.getElementById('install-location');
+  const gameVersionSelect = document.getElementById('game-version-select');
+  const currentVersionElement = document.getElementById('current-version');
   const settingsButton = document.getElementById('settings-button');
   const pauseButton = document.getElementById('pause-button');
   const clearCacheButton = document.getElementById('clear-cache');
@@ -35,15 +37,16 @@ window.addEventListener('DOMContentLoaded', () => {
   const autoLaunchCheckbox = document.getElementById('auto-launch-checkbox');
   const autoUpdateCheckbox = document.getElementById('auto-update-checkbox');
   const minimizeToTrayCheckbox = document.getElementById('minimize-to-tray-checkbox');
+  const enhancedGraphicsCheckbox = document.getElementById('enhanced-graphics-checkbox');
   const timeoutInput = document.getElementById('timeout-input');
   const saveSettingsButton = document.getElementById('save-settings');
-  const resetSettingsButton = document.getElementById('reset-settings');
-  const settingsStatus = document.getElementById('settings-status');
 
   // State
   let isScanning = false;
   let isPaused = false;
   let installDir = null;
+  let gameVersion = 'precu';
+  let enhancedGraphicsEnabled = false;
   let lastDownloadUpdate = Date.now();
   let lastDownloadBytes = 0;
 
@@ -146,6 +149,9 @@ window.addEventListener('DOMContentLoaded', () => {
         autoLaunchCheckbox.checked = settings.autoLaunch || false;
         autoUpdateCheckbox.checked = settings.autoUpdate || false;
         minimizeToTrayCheckbox.checked = settings.minimizeToTray || false;
+        const enhancedMap = settings.enhancedGraphics || {};
+        enhancedGraphicsEnabled = !!enhancedMap[gameVersion];
+        enhancedGraphicsCheckbox.checked = enhancedGraphicsEnabled;
         timeoutInput.value = settings.timeout || 30;
       }
     } catch (error) {
@@ -153,104 +159,216 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function resetSettings() {
-    scanModeSelect.value = 'quick';
-    autoLaunchCheckbox.checked = false;
-    autoUpdateCheckbox.checked = false;
-    minimizeToTrayCheckbox.checked = false;
-    timeoutInput.value = 30;
-    settingsStatus.textContent = 'Defaults restored. Click SAVE SETTINGS to apply.';
-  }
-
   async function saveSettings() {
     try {
+      enhancedGraphicsEnabled = enhancedGraphicsCheckbox.checked;
+      const existing = await ipcRenderer.invoke('get-settings') || {};
+      const enhancedMap = { ...(existing.enhancedGraphics || {}) };
+      enhancedMap[gameVersion] = enhancedGraphicsEnabled;
+
       const settings = {
         scanMode: scanModeSelect.value,
         autoLaunch: autoLaunchCheckbox.checked,
         autoUpdate: autoUpdateCheckbox.checked,
         minimizeToTray: minimizeToTrayCheckbox.checked,
+        enhancedGraphics: enhancedMap,
         timeout: parseInt(timeoutInput.value, 10) || 30
       };
 
       await ipcRenderer.invoke('save-settings', settings);
-      updateStatus('Settings saved successfully');
-      settingsStatus.textContent = 'Settings saved successfully.';
-      setTimeout(closeSettingsModal, 450);
+      closeSettingsModal();
+
+      if (enhancedGraphicsEnabled) {
+        updateStatus(`${versionLabel(gameVersion)} Enhanced Graphics enabled — syncing UI files...`);
+        await syncEnhancedGraphics();
+      } else {
+        updateStatus(`${versionLabel(gameVersion)} Enhanced Graphics disabled. Existing files were left untouched.`);
+      }
     } catch (error) {
       updateStatus(`Failed to save settings: ${error.message}`);
     }
   }
 
   saveSettingsButton.addEventListener('click', saveSettings);
-  resetSettingsButton.addEventListener('click', resetSettings);
 
   // ------------------------------
-  // Install Directory
+  // Install Directory / Game Version
   // ------------------------------
+  function versionLabel(version) {
+    return version === 'nge' ? 'NGE' : (version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU');
+  }
+
+  async function loadVersionInstallDir() {
+    gameVersion = gameVersionSelect.value || 'precu';
+
+    try {
+      const settings = await ipcRenderer.invoke('get-settings') || {};
+      const enhancedMap = settings.enhancedGraphics || {};
+      enhancedGraphicsEnabled = !!enhancedMap[gameVersion];
+      enhancedGraphicsCheckbox.checked = enhancedGraphicsEnabled;
+    } catch (_) {
+      enhancedGraphicsEnabled = false;
+      enhancedGraphicsCheckbox.checked = false;
+    }
+
+    // Never carry another profile's install path into this profile.
+    installDir = null;
+    currentDirectoryElement.textContent = `Loading ${versionLabel(gameVersion)} install location...`;
+
+    installDir = await ipcRenderer.invoke('get-install-dir', gameVersion);
+    currentVersionElement.textContent = `Version: ${versionLabel(gameVersion)}`;
+
+    if (installDir) {
+      currentDirectoryElement.textContent = installDir;
+      updateStatus(`${versionLabel(gameVersion)} install directory: ${installDir}`);
+    } else {
+      currentDirectoryElement.textContent = `No ${versionLabel(gameVersion)} install directory set`;
+      updateStatus(`Set a ${versionLabel(gameVersion)} installation directory`);
+    }
+  }
+
   async function showInstallLocationDialog() {
     try {
       const selectedDir = await ipcRenderer.invoke('select-directory');
       if (selectedDir) {
         installDir = selectedDir;
         currentDirectoryElement.textContent = installDir;
-        await ipcRenderer.invoke('save-install-dir', installDir);
-        updateStatus(`Install directory set: ${installDir}`);
+        await ipcRenderer.invoke('save-install-dir', {
+          version: gameVersion,
+          dir: installDir
+        });
+        updateStatus(`${versionLabel(gameVersion)} install directory set: ${installDir}`);
       }
     } catch (error) {
       updateStatus(`Error selecting directory: ${error.message}`);
     }
   }
 
+  gameVersionSelect.addEventListener('change', async () => {
+    installDir = null;
+    await loadVersionInstallDir();
+  });
   installLocationButton.addEventListener('click', showInstallLocationDialog);
+
+  // ------------------------------
+  // Launcher auto-update notifications
+  // ------------------------------
+  ipcRenderer.on('launcher-update-available', (_event, info) => {
+    updateStatus(`Launcher update ${info.version} downloading...`);
+  });
+
+  ipcRenderer.on('launcher-update-downloaded', (_event, info) => {
+    updateStatus(`Launcher update ${info.version} ready — it will install when the launcher closes.`);
+  });
 
   // ------------------------------
   // Play button
   // ------------------------------
   playButton.addEventListener('click', async () => {
     if (!installDir) {
-      updateStatus('Please set an install location first');
+      updateStatus(`Please set the ${versionLabel(gameVersion)} install location first`);
       await showInstallLocationDialog();
-      return;
-    }
-
-    const possibleExecutables = [
-      'SWGEmu.exe',
-      'swgemu.exe',
-      'SWGEMU.exe',
-      'SWGEmu/SWGEmu.exe',
-      'game/SWGEmu.exe',
-      'Star Wars Galaxies/SWGEmu.exe',
-      'SWGEmu Live/SWGEmu.exe'
-    ];
-
-    let exePath = null;
-    let foundExeName = '';
-
-    for (const exeName of possibleExecutables) {
-      const testPath = path.join(installDir, exeName);
-      if (fs.existsSync(testPath)) {
-        exePath = testPath;
-        foundExeName = exeName;
-        break;
-      }
-    }
-
-    if (!exePath) {
-      updateStatus('Could not find SWGEmu.exe. Please verify your installation.');
-      const ok = confirm('SWGEmu.exe not found. Would you like to browse for it?');
-      if (!ok) return;
-
-      const picked = await ipcRenderer.invoke('select-file');
-      if (!picked) return;
-      exePath = picked;
-      foundExeName = path.basename(picked);
+      if (!installDir) return;
     }
 
     try {
-      updateStatus(`Launching ${foundExeName}...`);
-      await ipcRenderer.invoke('launch-game', exePath, installDir);
-      updateStatus(`${foundExeName} launched successfully`);
+      updateStatus(`Checking ${versionLabel(gameVersion)} installation...`);
+
+      let diagnostic = await ipcRenderer.invoke('check-installation', {
+        version: gameVersion,
+        dir: installDir
+      });
+
+      // If the selected directory is wrong, let the user choose the actual
+      // executable. This path is then remembered for that version.
+      if (!diagnostic.ok) {
+        updateStatus(diagnostic.message || diagnostic.error || 'Game executable not found.');
+        const ok = confirm(
+          `${diagnostic.expected || 'Game executable'} was not found in this installation directory.\n\n` +
+          `Would you like to select the executable manually?`
+        );
+        if (!ok) return;
+
+        const picked = await ipcRenderer.invoke('select-file');
+        if (!picked) return;
+
+        const pickedDir = path.dirname(picked);
+        const pickedName = path.basename(picked).toLowerCase();
+
+        const valid = gameVersion === 'nge'
+          ? pickedName === 'swgclient_r.exe'
+          : pickedName === 'swgemu.exe';
+
+        if (!valid) {
+          updateStatus(
+            gameVersion === 'nge'
+              ? 'Please select swgclient_r.exe for the NGE client.'
+              : 'Please select SWGEmu.exe for the PRE-CU client.'
+          );
+          return;
+        }
+
+        installDir = pickedDir;
+        currentDirectoryElement.textContent = installDir;
+
+        await ipcRenderer.invoke('save-install-dir', {
+          version: gameVersion,
+          dir: installDir
+        });
+        await ipcRenderer.invoke('save-settings', {
+          [gameVersion === 'nge'
+            ? 'ngeExecutable'
+            : (gameVersion === 'precu-testcenter' ? 'precuTestCenterExecutable' : 'precuExecutable')]: picked
+        });
+
+        diagnostic = {
+          ok: true,
+          executable: picked,
+          message: `Found ${path.basename(picked)}`
+        };
+      }
+
+      let exePath = diagnostic.executable;
+      if (!exePath) {
+        updateStatus(`No ${versionLabel(gameVersion)} executable found.`);
+        return;
+      }
+
+      // Before launching any profile, perform a full manifest scan. This is
+      // especially important for NGE: a missing client DLL/config/asset can
+      // result in the game generating .dmp/.mdmp crash files instead of a
+      // useful launcher error.
+      updateStatus(`Verifying complete ${versionLabel(gameVersion)} client...`);
+// The executable may live in a subdirectory. Re-resolve it after the
+      // scan instead of assuming it is directly under the install root.
+
+      const foundExeName = path.basename(exePath);
+
+      if (gameVersion === 'precu-testcenter') {
+        updateStatus('Configuring PRE-CU Test Center login server...');
+        const loginResult = await ipcRenderer.invoke('configure-server-login', {
+          version: gameVersion,
+          dir: installDir
+        });
+
+        if (!loginResult || !loginResult.success) {
+          throw new Error(
+            loginResult?.error ||
+            'Could not configure the PRE-CU Test Center login server.'
+          );
+        }
+      }
+
+      updateStatus(`Launching ${versionLabel(gameVersion)} — ${foundExeName}...`);
+      const result = await ipcRenderer.invoke('launch-game', exePath);
+
+      if (result && result.success) {
+        updateStatus(`${versionLabel(gameVersion)} launched successfully`);
+      } else {
+        throw new Error('The game process did not start.');
+      }
     } catch (error) {
+      console.error('Launch error:', error);
       updateStatus(`Launch failed: ${error.message}`);
     }
   });
@@ -305,19 +423,156 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatus('Opening PayPal donation page...');
   });
 
+  function isEnhancedGraphicsFile(file) {
+    const name = String(file?.name || '').replace(/\\/g, '/').replace(/^[/\\]+/, '').toLowerCase();
+    // The enhanced package is intentionally limited to the existing TRE UI
+    // overlay plus UI-scaling .dat files. ReShade and unrelated client files
+    // remain under the normal manifest and are never toggled here.
+    return name.startsWith('ui/') || name.endsWith('.dat');
+  }
 
-  // These files contain per-player/per-machine settings and must NEVER be
-  // overwritten by launcher patching. They are deliberately local-only.
-  const PROTECTED_LOCAL_SETTINGS = new Set([
-    'options.cfg',
-    'user.cfg',
-    'swgemu_machineoptions.iff'
-  ]);
+  function shouldPatchFile(file) {
+    return enhancedGraphicsEnabled || !isEnhancedGraphicsFile(file);
+  }
 
-  function isProtectedLocalSetting(fileName) {
-    const normalized = String(fileName || '').replace(/\\/g, '/').toLowerCase();
-    const base = normalized.split('/').pop();
-    return PROTECTED_LOCAL_SETTINGS.has(base);
+  async function loadPatchFiles() {
+    const selectedFiles = await ipcRenderer.invoke('load-required-files', gameVersion);
+    if (!Array.isArray(selectedFiles)) return [];
+
+    const normalFiles = selectedFiles.filter(file => !isEnhancedGraphicsFile(file));
+    if (!enhancedGraphicsEnabled) return normalFiles;
+
+    // Enhanced UI/scaling files are hosted in the shared /tre/ tree. For NGE,
+    // pull those entries from the shared PRE-CU manifest and apply them to the
+    // currently selected NGE installation.
+    const sharedFiles = gameVersion === 'precu' || gameVersion === 'precu-testcenter'
+      ? selectedFiles
+      : await ipcRenderer.invoke('load-required-files', 'precu');
+    const enhancedFiles = Array.isArray(sharedFiles)
+      ? sharedFiles.filter(isEnhancedGraphicsFile)
+      : [];
+
+    const seen = new Set(normalFiles.map(file => String(file.name || '').toLowerCase()));
+    for (const file of enhancedFiles) {
+      const key = String(file.name || '').toLowerCase();
+      if (!seen.has(key)) {
+        normalFiles.push(file);
+        seen.add(key);
+      }
+    }
+
+    return normalFiles;
+  }
+
+  async function syncEnhancedGraphics() {
+    if (!installDir) {
+      updateStatus(`Set the ${versionLabel(gameVersion)} install location first.`);
+      return { success: false, errors: 1 };
+    }
+
+    try {
+      // Enhanced files live in the shared /tre/ tree even when NGE is selected.
+      const files = await ipcRenderer.invoke('load-required-files', 'precu');
+      const enhancedFiles = Array.isArray(files) ? files.filter(isEnhancedGraphicsFile) : [];
+      if (!enhancedFiles.length) {
+        updateStatus('No Enhanced Graphics files were found in the shared TRE manifest.');
+        return { success: false, errors: 1 };
+      }
+
+      let errors = 0;
+      for (let i = 0; i < enhancedFiles.length; i++) {
+        const file = enhancedFiles[i];
+        const normalizedName = String(file.name || '').replace(/\\/g, '/').replace(/^[/\\]+/, '');
+        const localPath = path.join(installDir, normalizedName);
+        updateProgress(i + 1, enhancedFiles.length, 'total');
+        updateStatus(`Enhanced Graphics: ${normalizedName}`);
+
+        let valid = false;
+        if (fs.existsSync(localPath)) {
+          try {
+            const localMd5 = await ipcRenderer.invoke('check-md5', localPath);
+            valid = String(localMd5).toLowerCase() === String(file.md5).toLowerCase();
+          } catch (_) {}
+        }
+
+        if (!valid && !(await downloadFile(file, localPath, true))) errors++;
+      }
+
+      updateStatus(errors === 0
+        ? `${versionLabel(gameVersion)} Enhanced Graphics installed and verified.`
+        : `Enhanced Graphics finished with ${errors} download error(s).`);
+      return { success: errors === 0, errors };
+    } catch (error) {
+      updateStatus(`Enhanced Graphics error: ${error.message}`);
+      return { success: false, errors: 1 };
+    }
+  }
+
+  async function runFullScanForLaunch() {
+    if (!installDir) return { success: false, errors: 1 };
+
+    try {
+      const files = await loadPatchFiles();
+      if (!Array.isArray(files) || files.length === 0) {
+        return { success: false, errors: 1 };
+      }
+
+      let errors = 0;
+      let missing = 0;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!shouldPatchFile(file)) {
+          updateProgress(i + 1, files.length, 'total');
+          continue;
+        }
+        const normalizedName = String(file.name || '')
+          .replace(/\\/g, '/')
+          .replace(/^[/\\]+/, '');
+        const localPath = path.join(installDir, normalizedName);
+        const lowerName = normalizedName.toLowerCase();
+
+        // Existing local user state is intentionally preserved. If the file
+        // exists, it is considered locally owned; if it does not exist on a
+        // fresh install, it must be downloaded from the manifest.
+        const localStateFile =
+          ['options.cfg','user.cfg','swgemu.cfg','swgemu_machineoptions.iff',
+           'swgemu_login.cfg','login.cfg','swgemu_preload.cfg'].includes(lowerName);
+        const preserveExisting =
+          (localStateFile && fs.existsSync(localPath)) ||
+          (lowerName.startsWith('profiles/') && fs.existsSync(localPath));
+
+        if (preserveExisting) continue;
+
+        let valid = false;
+        if (fs.existsSync(localPath)) {
+          try {
+            const md5 = await ipcRenderer.invoke('check-md5', localPath);
+            valid = String(md5).toLowerCase() === String(file.md5).toLowerCase();
+          } catch (_) {}
+        }
+
+        if (!valid) {
+          if (!fs.existsSync(localPath)) missing++;
+          if (!(await downloadFile(file, localPath, isEnhancedGraphicsFile(file)))) errors++;
+        }
+
+        updateProgress(i + 1, files.length, 'total');
+      }
+
+      // Re-check using the main-process executable resolver. This supports
+      // nested client layouts and all supported case variants.
+      const diag = await ipcRenderer.invoke('check-installation', {
+        version: gameVersion,
+        dir: installDir
+      });
+      if (!diag.ok) errors++;
+
+      return { success: errors === 0, errors: errors + missing };
+    } catch (error) {
+      console.error('Pre-launch full scan failed:', error);
+      return { success: false, errors: 1 };
+    }
   }
 
   async function startScan(mode) {
@@ -335,7 +590,14 @@ window.addEventListener('DOMContentLoaded', () => {
       await ipcRenderer.invoke('save-scan-mode', mode);
 
       updateStatus('Loading file list from server...');
-      const files = await ipcRenderer.invoke('load-required-files');
+      const files = await loadPatchFiles();
+
+      if (!Array.isArray(files) || files.length === 0) {
+        throw new Error(
+          `${versionLabel(gameVersion)} file manifest is empty or unavailable. ` +
+          `Check the internet connection and server manifest URL.`
+        );
+      }
 
       let verifiedCount = 0;
       let downloadedCount = 0;
@@ -349,17 +611,38 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         const file = files[i];
-        const localPath = path.join(installDir, file.name);
+        if (!shouldPatchFile(file)) {
+          updateProgress(i + 1, files.length, 'total');
+          continue;
+        }
+        const normalizedName = String(file.name || '').replace(/\\/g, '/').replace(/^[/\\]+/, '');
+        const localPath = path.join(installDir, normalizedName);
+        const lowerName = normalizedName.toLowerCase();
 
-        updateStatus(`Checking: ${file.name}`);
+        updateStatus(`Checking: ${normalizedName}`);
         updateProgress(i + 1, files.length, 'total');
 
-        // Never replace the user's game settings, even if an old/stale
-        // required-files.json accidentally lists them.
-        if (isProtectedLocalSetting(file.name) && fs.existsSync(localPath)) {
+        // Never patch/delete local user state or the client executable itself.
+        // These are intentionally outside server patch ownership.
+        const localStateFile =
+          ['options.cfg','user.cfg','swgemu.cfg','swgemu_machineoptions.iff',
+           'swgemu_login.cfg','login.cfg','swgemu_preload.cfg'].includes(lowerName);
+
+        // Preserve existing local/user state, but allow every one of these
+        // files to download on a fresh installation.
+        const protectedLocal =
+          (localStateFile && fs.existsSync(localPath)) ||
+          (lowerName.startsWith('profiles/') && fs.existsSync(localPath)) ||
+          ((lowerName === 'swgclient_r.exe' || lowerName === 'swgemu.exe') &&
+           fs.existsSync(localPath));
+
+        if (!fs.existsSync(localPath)) {
+          updateStatus(`Downloading ${versionLabel(gameVersion)} client file: ${normalizedName}`);
+        }
+
+        if (protectedLocal) {
           verifiedCount++;
-          updateProgress(100, 100, 'file');
-          updateStatus(`Preserved local settings: ${file.name}`);
+          updateStatus(`Preserved local file: ${normalizedName}`);
           continue;
         }
 
@@ -371,16 +654,15 @@ window.addEventListener('DOMContentLoaded', () => {
               updateProgress(100, 100, 'file');
             } else {
               downloadedCount++;
-              await downloadFile(file, localPath);
+              if (!(await downloadFile(file, localPath, isEnhancedGraphicsFile(file)))) errorCount++;
             }
-          } catch (_) {
+          } catch (error) {
             errorCount++;
-            downloadedCount++;
-            await downloadFile(file, localPath);
+            updateStatus(`Check failed for ${normalizedName}: ${error.message}`);
           }
         } else {
           downloadedCount++;
-          await downloadFile(file, localPath);
+          if (!(await downloadFile(file, localPath, isEnhancedGraphicsFile(file)))) errorCount++;
         }
       }
 
@@ -393,25 +675,18 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function downloadFile(file, destination) {
-    if (isProtectedLocalSetting(file.name) && fs.existsSync(destination)) {
-      updateStatus(`Preserved local settings: ${file.name}`);
-      return true;
-    }
-
+  async function downloadFile(file, destination, enhancedGraphics = false) {
     updateStatus(`Downloading: ${file.name}`);
 
     try {
-      // Always build the download URL from the current Ghosts HTTPS TRE host.
-      // The manifest may still contain legacy manifest/IP URLs, so never trust
-      // item.url for the actual download destination.
-      const relativeName = String(file.name || '')
-        .replace(/\\/g, '/')
-        .split('/')
-        .filter(Boolean)
-        .map(encodeURIComponent)
-        .join('/');
-      const url = `https://51-81-81-116.sslip.io/tre/${relativeName}`;
+      const baseUrl = enhancedGraphics
+        ? 'https://swg-ghosts.online/tre/'
+        : (gameVersion === 'nge'
+          ? 'https://swg-ghosts.online/tre/nge/'
+          : 'https://swg-ghosts.online/tre/');
+      // Enhanced Graphics is hosted in the shared /tre/ tree. Normal client
+      // files remain version-specific (/tre/ or /tre/nge/).
+      const url = baseUrl + file.name.replace(/^[/\\]+/, '');
 
       await ipcRenderer.invoke('download-file', {
         url,
@@ -438,17 +713,8 @@ window.addEventListener('DOMContentLoaded', () => {
   // Init
   // ------------------------------
   (async function init() {
-    installDir = await ipcRenderer.invoke('get-install-dir');
-
-    if (installDir) {
-      currentDirectoryElement.textContent = installDir;
-      updateStatus(`Install directory: ${installDir}`);
-    } else {
-      currentDirectoryElement.textContent = 'No install directory set';
-      updateStatus('Please set an install location');
-    }
-
     await loadSettings();
+    await loadVersionInstallDir();
     await refreshMaximizeIcon();
     updateStatus('Ready');
   })();

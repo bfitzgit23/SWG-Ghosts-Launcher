@@ -9,11 +9,8 @@
 
     :root {
       --radius: 12px;
-      --primary: #35C8FF;
-      --primary-bright: #66D9FF;
-      --cyan: #66D9FF;
-      --panel: rgba(5, 12, 20, 0.94);
-      --panel2: rgba(8, 20, 32, 0.92);
+      --gold: #FFD700;
+      --green: #4CAF50;
     }
 
     html, body {
@@ -119,7 +116,7 @@
     }
     .play-button:hover {
       transform: translateY(-50%) scale(1.05);
-      border-color: var(--primary);
+      border-color: var(--green);
     }
 
     /* Right side buttons */
@@ -136,7 +133,7 @@
     .side-button {
       background: linear-gradient(to bottom, rgba(0,0,0,.85), rgba(0,0,0,.95));
       border: 1px solid rgba(102,102,102,.5);
-      color: var(--primary-bright);
+      color: var(--gold);
       padding: 12px 24px;
       width: 200px;
       cursor: pointer;
@@ -146,8 +143,8 @@
       transition: 0.2s ease;
     }
     .side-button:hover {
-      border-color: var(--primary);
-      color: var(--primary);
+      border-color: var(--green);
+      color: var(--green);
       transform: translateY(-2px);
     }
     .side-button:active { transform: translateY(0); }
@@ -161,7 +158,7 @@
     .mini-button {
       background: linear-gradient(to bottom, rgba(0,0,0,.85), rgba(0,0,0,.95));
       border: 1px solid rgba(102,102,102,.5);
-      color: var(--primary-bright);
+      color: var(--gold);
       padding: 8px 16px;
       width: 200px;
       cursor: pointer;
@@ -172,14 +169,14 @@
       font-size: 12px;
     }
     .mini-button:hover {
-      border-color: var(--primary);
-      color: var(--primary);
+      border-color: var(--green);
+      color: var(--green);
       transform: translateY(-1px);
     }
 
     .paypal-donate {
-      background: linear-gradient(to bottom, #0B4D70, #062238);
-      border: 1px solid #35C8FF;
+      background: linear-gradient(to bottom, #0070ba, #003087);
+      border: 1px solid #003087;
       color: white;
       padding: 10px 16px;
       width: 200px;
@@ -196,9 +193,9 @@
       font-weight: bold;
     }
     .paypal-donate:hover {
-      background: linear-gradient(to bottom, #159DDD, #0874AD);
+      background: linear-gradient(to bottom, #0090fa, #0050c7);
       transform: translateY(-1px);
-      box-shadow: 0 5px 15px rgba(53, 200, 255, 0.28);
+      box-shadow: 0 5px 15px rgba(0, 80, 199, 0.3);
     }
     .paypal-icon { font-weight: bold; font-size: 16px; }
 
@@ -217,54 +214,28 @@
 
     .progress-bar {
       height: 18px;
-      background: linear-gradient(180deg, rgba(2,8,14,.92), rgba(5,16,27,.92));
-      border: 1px solid rgba(53,200,255,.28);
+      background: rgba(0,0,0,.7);
       border-radius: 10px;
       overflow: hidden;
       margin: 8px 0;
-      box-shadow:
-        inset 0 1px 4px rgba(0,0,0,.75),
-        0 0 8px rgba(30,167,255,.08);
     }
 
     .progress-fill {
       height: 100%;
       width: 0%;
-      background:
-        linear-gradient(180deg, #8BE7FF 0%, #35C8FF 38%, #0874AD 100%);
-      border-right: 1px solid rgba(210,248,255,.9);
-      box-shadow:
-        0 0 8px rgba(53,200,255,.72),
-        0 0 18px rgba(30,167,255,.38);
-      position: relative;
+      background: linear-gradient(90deg, var(--green), #66ff66);
       transition: width 0.3s ease;
-    }
-
-    .progress-fill::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: repeating-linear-gradient(
-        135deg,
-        rgba(255,255,255,.14) 0px,
-        rgba(255,255,255,.14) 6px,
-        rgba(255,255,255,0) 6px,
-        rgba(255,255,255,0) 12px
-      );
-      opacity: .45;
-      pointer-events: none;
     }
 
     .status-text {
       text-align: center;
       font-size: 14px;
-      color: var(--primary-bright);
-      text-shadow: 0 0 8px rgba(53,200,255,.25);
+      color: var(--green);
     }
 
     #current-directory {
       font-size: 12px;
-      color: #8FAABD;
+      color: #aaa;
       word-break: break-all;
       text-align: center;
       margin-top: 5px;
@@ -288,77 +259,39 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: linear-gradient(180deg, rgba(9,18,28,.98), rgba(3,9,15,.98));
-      border: 1px solid rgba(53,200,255,.9);
-      border-radius: 14px;
-      padding: 22px 24px 20px;
+      background: rgba(20, 20, 20, 0.95);
+      border: 2px solid var(--green);
+      border-radius: 12px;
+      padding: 25px;
       z-index: 1001;
-      width: 520px;
-      max-width: calc(100vw - 40px);
-      max-height: calc(100vh - 40px);
-      overflow-y: auto;
+      width: 420px;
       display: none;
-      box-shadow: 0 0 0 1px rgba(102,217,255,.12), 0 18px 55px rgba(0,0,0,.72), 0 0 35px rgba(30,167,255,.12);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       -webkit-app-region: no-drag;
     }
-
-    .settings-modal::-webkit-scrollbar { width: 8px; }
-    .settings-modal::-webkit-scrollbar-track { background: rgba(0,0,0,.25); border-radius: 8px; }
-    .settings-modal::-webkit-scrollbar-thumb { background: rgba(53,200,255,.45); border-radius: 8px; }
-    .settings-modal::-webkit-scrollbar-thumb:hover { background: rgba(102,217,255,.7); }
 
     .settings-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
-      border-bottom: 1px solid rgba(53,200,255,.35);
-      padding-bottom: 12px;
-      position: sticky;
-      top: -22px;
-      background: linear-gradient(180deg, rgba(9,18,28,1), rgba(9,18,28,.96));
-      z-index: 2;
+      margin-bottom: 20px;
+      border-bottom: 1px solid rgba(76, 175, 80, 0.5);
+      padding-bottom: 10px;
     }
 
     .settings-title {
       font-family: 'Orbitron', sans-serif;
-      font-size: 21px;
-      letter-spacing: 1px;
-      color: var(--cyan);
-      text-shadow: 0 0 12px rgba(53,200,255,.42);
-    }
-
-    .settings-subtitle {
-      margin: -7px 0 16px;
-      color: #8faabd;
-      font-size: 11px;
-      letter-spacing: .5px;
-    }
-
-    .settings-section-title {
-      color: #BFEFFF;
-      font-family: 'Orbitron', sans-serif;
-      font-size: 11px;
-      letter-spacing: 1.2px;
-      margin: 16px 0 8px;
-      text-transform: uppercase;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .settings-section-title::after {
-      content: '';
-      height: 1px;
-      flex: 1;
-      background: linear-gradient(90deg, rgba(53,200,255,.35), transparent);
+      font-size: 20px;
+      color: var(--green);
+      text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
     }
 
     .settings-close {
-      background: rgba(255,35,35,.82);
-      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,0,0,.7);
+      border: none;
       color: white;
-      width: 29px;
-      height: 29px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       font-size: 18px;
       font-weight: bold;
@@ -369,128 +302,227 @@
       justify-content: center;
       line-height: 1;
     }
-    .settings-close:hover { background: rgba(255,35,35,1); transform: scale(1.08); }
+    .settings-close:hover {
+      background: rgba(255,0,0,.9);
+      transform: scale(1.1);
+    }
 
     .setting-item {
-      margin-bottom: 9px;
-      padding: 11px 12px;
-      background: linear-gradient(180deg, rgba(8,19,30,.88), rgba(4,11,18,.88));
-      border-radius: 9px;
-      border: 1px solid rgba(125,160,180,.18);
+      margin-bottom: 18px;
+      padding: 10px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      border: 1px solid rgba(102,102,102,0.3);
     }
-    .setting-item:hover { border-color: rgba(53,200,255,.3); }
 
     .setting-label {
       display: block;
       margin-bottom: 8px;
-      color: #66D9FF;
-      font-size: 12px;
+      color: var(--gold);
+      font-size: 14px;
       font-family: 'Orbitron', sans-serif;
-      letter-spacing: .4px;
-    }
-
-    .setting-help {
-      display: block;
-      margin-top: 5px;
-      color: #71899A;
-      font-size: 10px;
-      line-height: 1.35;
     }
 
     .setting-select {
       width: 100%;
-      padding: 10px 11px;
+      padding: 10px;
       border-radius: 6px;
-      background: rgba(0,0,0,.72);
-      border: 1px solid rgba(122,160,180,.34);
-      color: #F2FAFF;
-      font-size: 13px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(102,102,102,0.5);
+      color: white;
+      font-size: 14px;
       transition: all 0.2s;
       cursor: pointer;
     }
-    .setting-select:hover, .setting-select:focus {
+    .setting-select:focus {
       outline: none;
-      border-color: rgba(53,200,255,.8);
-      box-shadow: 0 0 10px rgba(30,167,255,.16);
+      border-color: var(--green);
+      box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
     }
-
-    .setting-number { text-align: left; }
-
-    .setting-check-row {
-      display: flex;
-      align-items: center;
-      gap: 11px;
-      min-height: 28px;
-      color: #E7F5FC;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .setting-check-row:hover { color: #FFFFFF; }
 
     .setting-checkbox {
-      appearance: none;
-      -webkit-appearance: none;
-      flex: 0 0 auto;
-      margin: 0;
-      width: 19px;
-      height: 19px;
-      border-radius: 4px;
-      border: 1px solid #66869A;
-      background: #050B11;
+      margin-right: 10px;
+      width: 18px;
+      height: 18px;
+      vertical-align: middle;
+      accent-color: var(--green);
+    }
+  
+    /* ============================================================
+       SWG GHOSTS COLOR THEME
+       ============================================================ */
+    :root {
+      --ghosts-cyan: #55DFFF;
+      --ghosts-cyan-bright: #8EEAFF;
+      --ghosts-blue: #3B82D0;
+      --ghosts-blue-dark: #102744;
+      --ghosts-panel: rgba(5,14,29,0.82);
+      --ghosts-panel-border: rgba(85,223,255,0.55);
+      --ghosts-text: #E8F7FF;
+      --ghosts-muted: #78C9E8;
+      --ghosts-green: #55DFFF;
+    }
+
+    .side-button,
+    .mini-button {
+      color: var(--ghosts-cyan) !important;
+      border-color: rgba(85,223,255,0.42) !important;
+      text-shadow: 0 0 6px rgba(85,223,255,0.22);
+    }
+
+    .side-button:hover,
+    .mini-button:hover {
+      color: #FFFFFF !important;
+      border-color: var(--ghosts-cyan) !important;
+      box-shadow: 0 0 12px rgba(85,223,255,0.28);
+    }
+
+    .setting-label,
+    #current-version {
+      color: var(--ghosts-cyan) !important;
+    }
+
+    .setting-select {
+      color: var(--ghosts-text) !important;
+      background: rgba(5,14,29,0.92) !important;
+      border-color: rgba(85,223,255,0.45) !important;
+    }
+
+    .setting-select:focus {
+      border-color: var(--ghosts-cyan) !important;
+      box-shadow: 0 0 10px rgba(85,223,255,0.25) !important;
+    }
+
+    .status-text {
+      color: var(--ghosts-green) !important;
+    }
+
+    #current-directory {
+      color: var(--ghosts-muted) !important;
+    }
+
+    .settings-modal {
+      border-color: var(--ghosts-cyan) !important;
+    }
+
+    .settings-title {
+      color: var(--ghosts-cyan) !important;
+      text-shadow: 0 0 10px rgba(85,223,255,0.35) !important;
+    }
+
+    .settings-header {
+      border-bottom-color: rgba(85,223,255,0.45) !important;
+    }
+
+    .progress-container {
+      border: 1px solid rgba(85,223,255,0.22);
+    }
+
+    .progress-fill {
+      background: linear-gradient(90deg, #1F6FB2, #55DFFF) !important;
+      box-shadow: 0 0 8px rgba(85,223,255,0.28);
+    }
+
+    .play-button:hover {
+      border-color: var(--ghosts-cyan) !important;
+      box-shadow: 0 0 16px rgba(85,223,255,0.22);
+    }
+
+
+    /* Ghosts launcher status text — no legacy green */
+    .status-text,
+    #status,
+    #scan-status,
+    .status,
+    #current-version,
+    #current-directory,
+    .progress-text,
+    .progress-status {
+      color: #55DFFF !important;
+      text-shadow: 0 0 6px rgba(85,223,255,0.22);
+    }
+
+    .progress-count,
+    .file-count,
+    .download-status {
+      color: #55DFFF !important;
+    }
+
+
+    /* ============================================================
+       SETTINGS PANEL — GHOSTS THEME FIX
+       Keep all setting text readable after the Ghosts palette is
+       applied.  The old generic label rules left checkbox labels
+       inheriting the browser's default black text.
+       ============================================================ */
+    .settings-modal {
+      background: rgba(8, 12, 20, 0.96) !important;
+      border-color: var(--ghosts-cyan) !important;
+      color: var(--ghosts-text) !important;
+    }
+
+    .settings-modal .setting-item {
+      background: rgba(5, 14, 29, 0.68) !important;
+      border-color: rgba(85, 223, 255, 0.20) !important;
+    }
+
+    .settings-modal .setting-item > label:not(.setting-label) {
+      display: flex;
+      align-items: center;
+      color: var(--ghosts-text) !important;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 14px;
+      line-height: 20px;
       cursor: pointer;
-      position: relative;
-      box-shadow: inset 0 0 0 1px rgba(0,0,0,.3);
-    }
-    .setting-checkbox:checked {
-      border-color: #35C8FF;
-      background: linear-gradient(180deg, #159DDD, #0874AD);
-      box-shadow: 0 0 10px rgba(53,200,255,.28);
-    }
-    .setting-checkbox:checked::after {
-      content: '✓';
-      position: absolute;
-      left: 3px;
-      top: -1px;
-      color: #fff;
-      font-size: 15px;
-      font-weight: 700;
+      text-shadow: 0 0 5px rgba(85, 223, 255, 0.10);
     }
 
-    .settings-info {
-      display: grid;
-      grid-template-columns: 110px 1fr;
-      gap: 6px 10px;
-      padding: 12px;
-      background: rgba(2,8,13,.65);
-      border: 1px solid rgba(53,200,255,.14);
-      border-radius: 9px;
+    .settings-modal .setting-checkbox {
+      flex: 0 0 auto;
+      margin: 0 12px 0 0 !important;
+      width: 18px !important;
+      height: 18px !important;
+      accent-color: var(--ghosts-cyan) !important;
+      cursor: pointer;
+    }
+
+    .settings-modal .setting-checkbox:focus-visible {
+      outline: 1px solid var(--ghosts-cyan);
+      outline-offset: 2px;
+    }
+
+    .settings-modal .setting-label {
+      color: var(--ghosts-cyan) !important;
+    }
+
+    .settings-modal .setting-select {
+      color: var(--ghosts-text) !important;
+      background: rgba(5, 14, 29, 0.92) !important;
+      border-color: rgba(85, 223, 255, 0.45) !important;
+    }
+
+    .settings-modal #timeout-input {
+      color: var(--ghosts-text) !important;
+      caret-color: var(--ghosts-cyan) !important;
+    }
+
+    .settings-modal #save-settings {
+      color: var(--ghosts-cyan) !important;
+    }
+
+    .settings-modal .enhanced-graphics-setting {
+      display: block !important;
+    }
+
+    .settings-modal .enhanced-graphics-help {
+      margin: 7px 0 0 30px;
+      color: var(--ghosts-muted) !important;
       font-size: 11px;
+      line-height: 16px;
+      opacity: 0.9;
     }
-    .settings-info .key { color: #6F8FA4; }
-    .settings-info .value { color: #D8F3FF; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    .settings-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 17px;
-    }
-    .settings-actions .side-button { width: 100%; padding: 11px 14px; }
-    .settings-reset {
-      background: rgba(255,255,255,.03) !important;
-      color: #9CB3C2 !important;
-      border-color: rgba(130,155,170,.25) !important;
-    }
-    .settings-reset:hover { color: #DDF5FF !important; border-color: rgba(53,200,255,.55) !important; }
-
-    .settings-status {
-      margin-top: 10px;
-      min-height: 15px;
-      text-align: center;
-      color: #66D9FF;
-      font-size: 10px;
-    }
-  </style>
+</style>
 </head>
 
 <body>
@@ -500,64 +532,53 @@
   <div class="modal-overlay" id="modal-overlay"></div>
   <div class="settings-modal" id="settings-modal">
     <div class="settings-header">
-      <div class="settings-title">GHOSTS SETTINGS</div>
-      <button class="settings-close" id="settings-close" aria-label="Close settings">×</button>
+      <div class="settings-title">SETTINGS</div>
+      <button class="settings-close" id="settings-close">×</button>
     </div>
-    <div class="settings-subtitle">Launcher configuration • SWG Ghosts</div>
 
-    <div class="settings-section-title">SCAN &amp; LAUNCH</div>
     <div class="setting-item">
-      <label class="setting-label" for="scan-mode-select">Scan Mode</label>
+      <label class="setting-label">Scan Mode</label>
       <select class="setting-select" id="scan-mode-select">
         <option value="quick">Quick Scan</option>
         <option value="full">Full Scan</option>
       </select>
-      <span class="setting-help">Choose the default verification mode used by the launcher.</span>
     </div>
 
     <div class="setting-item">
-      <label class="setting-check-row">
+      <label>
         <input type="checkbox" class="setting-checkbox" id="auto-launch-checkbox">
-        <span>Auto-launch game after scan</span>
+        Auto-launch after scan
       </label>
     </div>
 
     <div class="setting-item">
-      <label class="setting-check-row">
+      <label>
         <input type="checkbox" class="setting-checkbox" id="auto-update-checkbox">
-        <span>Check for launcher updates automatically</span>
+        Auto-update launcher
       </label>
-      <span class="setting-help">Uses the launcher update channel when update metadata is available.</span>
     </div>
 
-    <div class="settings-section-title">WINDOW</div>
     <div class="setting-item">
-      <label class="setting-check-row">
+      <label>
         <input type="checkbox" class="setting-checkbox" id="minimize-to-tray-checkbox">
-        <span>Minimize to system tray</span>
+        Minimize to system tray
       </label>
     </div>
 
-    <div class="settings-section-title">CONNECTION</div>
+    <div class="setting-item enhanced-graphics-setting">
+      <label>
+        <input type="checkbox" class="setting-checkbox" id="enhanced-graphics-checkbox">
+        Enhanced Graphics
+      </label>
+      <div class="enhanced-graphics-help">Downloads the Ghosts enhanced UI files and UI-scaling .dat files from the existing TRE server for the selected client.</div>
+    </div>
+
     <div class="setting-item">
-      <label class="setting-label" for="timeout-input">Connection Timeout (seconds)</label>
-      <input type="number" class="setting-select setting-number" id="timeout-input" min="10" max="120" value="30">
-      <span class="setting-help">Applies to launcher requests when contacting the Ghosts patch server.</span>
+      <label class="setting-label">Connection Timeout (seconds)</label>
+      <input type="number" class="setting-select" id="timeout-input" min="10" max="120" value="30">
     </div>
 
-    <div class="settings-section-title">SERVER</div>
-    <div class="settings-info">
-      <div class="key">Server</div><div class="value">SWG Ghosts</div>
-      <div class="key">Address</div><div class="value">51.81.81.116:44453</div>
-      <div class="key">Patch Server</div><div class="value">https://51-81-81-116.sslip.io/tre/</div>
-      <div class="key">Game</div><div class="value">SWG Ghosts</div>
-    </div>
-
-    <div class="settings-actions">
-      <button class="side-button settings-reset" id="reset-settings">RESET DEFAULTS</button>
-      <button class="side-button" id="save-settings">SAVE SETTINGS</button>
-    </div>
-    <div class="settings-status" id="settings-status"></div>
+    <button class="side-button" id="save-settings" style="margin-top: 20px; width: 100%;">SAVE SETTINGS</button>
   </div>
 
   <div class="main-content">
@@ -572,9 +593,18 @@
     <div class="side-buttons">
       <button class="side-button" id="quick-scan">QUICK SCAN</button>
       <button class="side-button" id="full-scan">FULL SCAN (RECHECK ALL)</button>
+      <div class="setting-group" style="margin-bottom:12px;">
+        <label for="game-version-select" style="display:block; margin-bottom:6px;">GAME VERSION</label>
+        <select id="game-version-select" class="setting-select">
+          <option value="precu">SWG GHOSTS — PRE-CU</option>
+           <option value="precu-testcenter">SWG GHOSTS — PRE-CU TEST CENTER</option>
+          <option value="nge">SWG GHOSTS — NGE</option>
+        </select>
+      </div>
       <button class="side-button" id="install-location">INSTALL LOCATION</button>
       <button class="side-button" id="settings-button">SETTINGS</button>
 
+      <div id="current-version" class="status-text" style="margin-bottom:4px;">Version: PRE-CU</div>
       <div id="current-directory"></div>
 
       <div class="button-group">
@@ -600,7 +630,7 @@
       </div>
 
       <div id="status" class="status-text">Ready</div>
-      <div id="download-speed" class="status-text" style="font-size: 12px; color: #66D9FF;"></div>
+      <div id="download-speed" class="status-text" style="font-size: 12px; color: #66ff66;"></div>
     </div>
   </div>
 

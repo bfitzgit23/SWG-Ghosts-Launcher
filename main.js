@@ -2,6 +2,7 @@
 // 1920x1080 design, DPI/Zoom lock, sane sizing, F11 fullscreen toggle, window control IPC
 
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -15,7 +16,9 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 let mainWindow;
 
 // Keep ONE source of truth for your patch base
-const BASE_URL = 'https://51-81-81-116.sslip.io/tre/';
+const PRECU_BASE_URL = 'https://212-28-185-14.sslip.io/tre/';
+const NGE_BASE_URL = 'https://212-28-185-14.sslip.io/tre/nge/';
+const PRECU_TESTCENTER_LOGIN_IP = '212.28.185.14';
 
 function toggleFullscreen(win) {
   if (!win || win.isDestroyed()) return;
@@ -141,10 +144,11 @@ ipcMain.handle('window:isFullscreen', () => {
 // ------------------------------
 // Load required files from server
 // ------------------------------
-ipcMain.handle('load-required-files', async () => {
+ipcMain.handle('load-required-files', async (event, version = 'precu') => {
   return new Promise((resolve, reject) => {
-    const url = BASE_URL + 'required-files.json';
-    console.log(`Loading files from: ${url}`);
+    const baseUrl = version === 'nge' ? NGE_BASE_URL : PRECU_BASE_URL;
+    const url = baseUrl + 'required-files.json';
+    console.log(`Loading ${version.toUpperCase()} files from: ${url}`);
 
     const client = url.startsWith('https://') ? https : http;
     const req = client.get(url, (response) => {
@@ -154,7 +158,7 @@ ipcMain.handle('load-required-files', async () => {
         const redirectClient = redirectUrl.startsWith('https://') ? https : http;
         redirectClient.get(redirectUrl, (redirectResponse) => {
           if (redirectResponse.statusCode !== 200) {
-            reject(new Error(`Server returned status code: ${redirectResponse.statusCode}`));
+            reject(new Error(`Server returned status code ${redirectResponse.statusCode}`));
             return;
           }
           let data = '';
@@ -165,7 +169,7 @@ ipcMain.handle('load-required-files', async () => {
       }
 
       if (response.statusCode !== 200) {
-        reject(new Error(`Server returned status code: ${response.statusCode}`));
+        reject(new Error(`Server returned status code ${response.statusCode}`));
         return;
       }
 
@@ -174,18 +178,13 @@ ipcMain.handle('load-required-files', async () => {
       response.on('end', () => parseRequiredFiles(data, resolve, reject));
     });
 
-    req.on('error', (error) => {
-      console.error('HTTPS request error:', error);
-      reject(new Error('Failed to fetch files list: ' + error.message));
-    });
-
+    req.on('error', (error) => reject(new Error('Failed to fetch files list: ' + error.message)));
     req.setTimeout(15000, () => {
       req.destroy();
       reject(new Error('Request timeout after 15 seconds'));
     });
   });
 });
-
 function parseRequiredFiles(data, resolve, reject) {
   try {
     const jsonData = JSON.parse(data);
@@ -196,10 +195,11 @@ function parseRequiredFiles(data, resolve, reject) {
       item.name &&
       typeof item.name === 'string' &&
       item.name.trim() !== '' &&
-      item.url &&
-      item.md5 &&
-      item.size > 0
-    );
+      item.md5
+    ).map(item => ({
+      ...item,
+      size: Number.isFinite(Number(item.size)) ? Number(item.size) : 0
+    }));
 
     console.log(`Loaded ${validData.length} valid files from server`);
     resolve(validData);
@@ -246,22 +246,31 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, s
     const dir = path.dirname(destination);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
+    // NEVER write directly over a working game executable/configuration.
+    // A failed download or MD5 check must not delete the user's current file.
+    const tempPath = destination + `.ghosts-download-${process.pid}-${Date.now()}.tmp`;
+
+    const cleanupTemp = () => {
+      try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (_) {}
+    };
+
     const downloadTo = (requestUrl, redirectCount = 0) => {
       if (redirectCount > 5) {
+        cleanupTemp();
         reject(new Error('Too many redirects'));
         return;
       }
 
       const client = requestUrl.startsWith('https://') ? https : http;
-      const file = fs.createWriteStream(destination);
+      const file = fs.createWriteStream(tempPath);
       let downloadedBytes = 0;
 
-      console.log(`Downloading: ${requestUrl} to ${destination}`);
+      console.log(`Downloading: ${requestUrl} to temporary file ${tempPath}`);
 
       const req = client.get(requestUrl, (response) => {
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
           file.close();
-          try { fs.unlinkSync(destination); } catch (_) {}
+          cleanupTemp();
           response.resume();
           downloadTo(new URL(response.headers.location, requestUrl).toString(), redirectCount + 1);
           return;
@@ -269,7 +278,7 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, s
 
         if (response.statusCode !== 200) {
           file.close();
-          try { fs.unlinkSync(destination); } catch (_) {}
+          cleanupTemp();
           reject(new Error(`HTTP ${response.statusCode}`));
           return;
         }
@@ -294,61 +303,92 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, s
         file.on('finish', () => {
           file.close();
 
-          // Never accept an empty/partial download as successful.
-          // This protects the client from creating 0 KB files when the
-          // manifest may contain a stale URL or the web server responds with an
-          // empty response.
-          let actualSize = 0;
-          try {
-            actualSize = fs.statSync(destination).size;
-          } catch (statError) {
-            reject(statError);
-            return;
-          }
-
-          if (actualSize <= 0) {
-            try { fs.unlinkSync(destination); } catch (_) {}
-            reject(new Error(`Server returned an empty file (0 bytes): ${requestUrl}`));
-            return;
-          }
-
-          if (Number.isFinite(Number(size)) && Number(size) > 0 && actualSize !== Number(size)) {
-            try { fs.unlinkSync(destination); } catch (_) {}
-            reject(new Error(`Size mismatch: expected ${size} bytes, got ${actualSize}`));
-            return;
-          }
-
           if (!expectedMd5) {
-            resolve({ path: destination, size: actualSize });
+            try {
+              fs.renameSync(tempPath, destination);
+              resolve({ path: destination });
+            } catch (error) {
+              cleanupTemp();
+              reject(error);
+            }
             return;
           }
 
           const hash = crypto.createHash('md5');
-          const readStream = fs.createReadStream(destination);
+          const readStream = fs.createReadStream(tempPath);
+
           readStream.on('data', (data) => hash.update(data));
           readStream.on('end', () => {
-            const downloadedMd5 = hash.digest('hex');
-            if (downloadedMd5 !== expectedMd5) {
-              try { fs.unlinkSync(destination); } catch (_) {}
-              reject(new Error(`MD5 mismatch: expected ${expectedMd5}, got ${downloadedMd5}`));
-            } else {
+            const downloadedMd5 = hash.digest('hex').toLowerCase();
+            const expected = String(expectedMd5).toLowerCase();
+
+            if (downloadedMd5 !== expected) {
+              cleanupTemp();
+              reject(new Error(`MD5 mismatch: expected ${expected}, got ${downloadedMd5}. Existing file was preserved.`));
+              return;
+            }
+
+            try {
+              // Replace only after the complete download has passed MD5.
+              // Windows can refuse rename-over-existing files, so use a
+              // backup swap when necessary.
+              const backupPath = destination + '.ghosts-old';
+              if (fs.existsSync(backupPath)) {
+                try { fs.unlinkSync(backupPath); } catch (_) {}
+              }
+
+              if (fs.existsSync(destination)) {
+                try {
+                  fs.renameSync(destination, backupPath);
+                } catch (_) {
+                  // If the existing file is locked, do not destroy it.
+                  cleanupTemp();
+                  reject(new Error(`Existing file is locked and could not be replaced: ${destination}`));
+                  return;
+                }
+              }
+
+              try {
+                fs.renameSync(tempPath, destination);
+                try { if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath); } catch (_) {}
+              } catch (error) {
+                // Restore the original if replacement failed.
+                try {
+                  if (!fs.existsSync(destination) && fs.existsSync(backupPath)) {
+                    fs.renameSync(backupPath, destination);
+                  }
+                } catch (_) {}
+                cleanupTemp();
+                reject(error);
+                return;
+              }
+
               resolve({ path: destination, md5: downloadedMd5 });
+            } catch (error) {
+              cleanupTemp();
+              reject(error);
             }
           });
-          readStream.on('error', reject);
+
+          readStream.on('error', (error) => {
+            cleanupTemp();
+            reject(error);
+          });
         });
       });
 
       req.on('error', (error) => {
         console.error(`Download error for ${requestUrl}:`, error);
-        try { fs.unlinkSync(destination); } catch (_) {}
+        try { file.close(); } catch (_) {}
+        cleanupTemp();
         reject(error);
       });
 
       req.setTimeout(30000, () => {
         req.destroy();
-        try { fs.unlinkSync(destination); } catch (_) {}
-        reject(new Error('Download timeout after 30 seconds'));
+        try { file.close(); } catch (_) {}
+        cleanupTemp();
+        reject(new Error('Download timeout after 30 seconds. Existing file was preserved.'));
       });
     };
 
@@ -391,86 +431,283 @@ ipcMain.handle('select-file', async () => {
 });
 
 // ------------------------------
+function appendLauncherDiagnostic(message) {
+  try {
+    const logDir = path.join(app.getPath('userData'), 'logs');
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(
+      path.join(logDir, 'launch-diagnostic.log'),
+      `[${new Date().toISOString()}] ${message}\n`,
+      'utf8'
+    );
+  } catch (_) {}
+}
+
+// ------------------------------
+// Server login configuration
+// ------------------------------
+// Only the PRE-CU Test Center profile changes loginServerAddress0.
+// PRE-CU and NGE retain their existing login settings.
+ipcMain.handle('configure-server-login', async (event, { version = 'precu', dir } = {}) => {
+  try {
+    if (version !== 'precu-testcenter') return { success: true, changed: false };
+    const targetLoginIp = PRECU_TESTCENTER_LOGIN_IP;
+
+    if (!dir || typeof dir !== 'string') {
+      return { success: false, error: 'No PRE-CU Test Center installation directory selected.' };
+    }
+
+    const rootDir = path.resolve(dir);
+    if (!fs.existsSync(rootDir) || !fs.statSync(rootDir).isDirectory()) {
+      return { success: false, error: `PRE-CU Test Center installation directory does not exist: ${rootDir}` };
+    }
+
+    const candidates = [
+      path.join(rootDir, 'swgemu_login.cfg'),
+      path.join(rootDir, 'login.cfg'),
+      path.join(rootDir, 'game', 'swgemu_login.cfg'),
+      path.join(rootDir, 'game', 'login.cfg')
+    ];
+
+    const loginPath = candidates.find(p => fs.existsSync(p) && fs.statSync(p).isFile());
+    if (!loginPath) {
+      return {
+        success: false,
+        changed: false,
+        error: 'Could not find swgemu_login.cfg or login.cfg in the PRE-CU Test Center installation.'
+      };
+    }
+
+    let content = fs.readFileSync(loginPath, 'utf8');
+    const before = content;
+    const addressPattern = /(^[ \t]*loginServerAddress0[ \t]*=[ \t]*)([^\r\n;#]+)/mi;
+
+    if (addressPattern.test(content)) {
+      content = content.replace(addressPattern, `$1${targetLoginIp}`);
+    } else {
+      if (!content.endsWith('\n')) content += '\r\n';
+      content += `loginServerAddress0=${targetLoginIp}\r\n`;
+    }
+
+    if (content !== before) {
+      const temp = loginPath + `.ghosts-login-${process.pid}-${Date.now()}.tmp`;
+      fs.writeFileSync(temp, content, 'utf8');
+      try {
+        fs.renameSync(temp, loginPath);
+      } catch (error) {
+        try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch (_) {}
+        return { success: false, changed: false, error: `Could not replace login configuration: ${error.message}` };
+      }
+    }
+
+    return { success: true, changed: content !== before, path: loginPath, loginIp: targetLoginIp };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ------------------------------
+// Installation diagnostics
+// ------------------------------
+ipcMain.handle('check-installation', async (event, { version = 'precu', dir } = {}) => {
+  try {
+    if (!dir || typeof dir !== 'string') {
+      return { ok: false, error: 'No installation directory selected.' };
+    }
+
+    const rootDir = path.resolve(dir);
+    if (!fs.existsSync(rootDir) || !fs.statSync(rootDir).isDirectory()) {
+      return { ok: false, error: `Installation directory does not exist: ${rootDir}` };
+    }
+
+    const names = version === 'nge'
+      ? ['swgclient_r.exe', 'SwgClient_r.exe', 'SWGClient_r.exe']
+      : ['SWGEmu.exe', 'swgemu.exe', 'SWGEMU.exe'];
+
+    const wanted = new Set(names.map(n => n.toLowerCase()));
+    const skipDirs = new Set([
+      'node_modules', '.git', 'logs', 'cache', 'caches',
+      'gpuCache', 'crashpad', 'crashes'
+    ]);
+
+    let exePath = null;
+
+    // First check the saved/standard locations.
+    const candidates = [];
+    for (const name of names) {
+      candidates.push(path.join(rootDir, name));
+      candidates.push(path.join(rootDir, 'game', name));
+      candidates.push(path.join(rootDir, 'SWGEmu', name));
+      candidates.push(path.join(rootDir, 'SWGEmu Live', name));
+      candidates.push(path.join(rootDir, 'Star Wars Galaxies', name));
+    }
+    exePath = candidates.find(p => {
+      try { return fs.existsSync(p) && fs.statSync(p).isFile(); }
+      catch (_) { return false; }
+    });
+
+    // Search the selected client directory recursively. This handles clients
+    // whose executable is under a game/client/bin subdirectory and avoids
+    // requiring every player to have the same folder layout.
+    if (!exePath) {
+      const queue = [{ dir: rootDir, depth: 0 }];
+      const maxDepth = 4;
+
+      while (queue.length && !exePath) {
+        const current = queue.shift();
+        let entries = [];
+        try {
+          entries = fs.readdirSync(current.dir, { withFileTypes: true });
+        } catch (_) {
+          continue;
+        }
+
+        for (const entry of entries) {
+          if (entry.name.startsWith('.') || skipDirs.has(entry.name)) continue;
+          const full = path.join(current.dir, entry.name);
+
+          if (entry.isFile() && wanted.has(entry.name.toLowerCase())) {
+            exePath = full;
+            break;
+          }
+
+          if (entry.isDirectory() && current.depth < maxDepth) {
+            queue.push({ dir: full, depth: current.depth + 1 });
+          }
+        }
+      }
+    }
+
+    const expected = version === 'nge' ? 'swgclient_r.exe' : 'SWGEmu.exe';
+    return {
+      ok: !!exePath,
+      version,
+      directory: rootDir,
+      executable: exePath || null,
+      expected,
+      message: exePath
+        ? `Found ${path.basename(exePath)}`
+        : `Could not find ${expected} in the selected installation.`
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
 // Launch game
 // ------------------------------
-ipcMain.handle('launch-game', async (event, exePath, installDir = null) => {
+ipcMain.handle('launch-game', async (event, exePath) => {
   return new Promise((resolve, reject) => {
     if (!exePath || typeof exePath !== 'string') {
       reject(new Error('Invalid executable path'));
       return;
     }
 
-    if (!fs.existsSync(exePath)) {
-      reject(new Error('Executable not found: ' + exePath));
+    const resolvedExe = path.resolve(exePath);
+    if (!fs.existsSync(resolvedExe)) {
+      reject(new Error('Executable not found: ' + resolvedExe));
       return;
     }
 
+    let stat;
     try {
-      const { spawn } = require('child_process');
-      const exeName = path.basename(exePath);
-      const exeDir = path.dirname(exePath);
+      stat = fs.statSync(resolvedExe);
+    } catch (error) {
+      reject(new Error('Cannot access executable: ' + error.message));
+      return;
+    }
 
-      // SWGEmu should be launched as a normal Windows process, not through
-      // cmd.exe. shell:true can change quoting, environment handling, and
-      // the process working directory compared with launching SWGEmu.exe
-      // directly from Explorer/a shortcut.
-      //
-      // Prefer the launcher's selected SWG installation directory because
-      // SWG client files/configuration are normally resolved relative to it.
-      // If it is unavailable, fall back to the executable's directory.
-      let workingDirectory = exeDir;
+    if (!stat.isFile()) {
+      reject(new Error('Selected executable is not a file: ' + resolvedExe));
+      return;
+    }
 
-      if (installDir && typeof installDir === 'string') {
-        try {
-          if (fs.existsSync(installDir) && fs.statSync(installDir).isDirectory()) {
-            workingDirectory = path.resolve(installDir);
-          }
-        } catch (_) {
-          // Keep exeDir fallback.
+    const exeDir = path.dirname(resolvedExe);
+    const exeName = path.basename(resolvedExe);
+    const { spawn } = require('child_process');
+
+    const log = (msg) => {
+      try { appendLauncherDiagnostic(msg); } catch (_) {}
+    };
+
+    const startWithPowerShell = () => {
+      const psCommand =
+        `$p = Start-Process -FilePath '${resolvedExe.replace(/'/g, "''")}' ` +
+        `-WorkingDirectory '${exeDir.replace(/'/g, "''")}' -PassThru; ` +
+        `Write-Output $p.Id`;
+
+      const ps = spawn('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-Command', psCommand
+      ], {
+        cwd: exeDir,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      let stdout = '';
+      let stderr = '';
+      ps.stdout.on('data', d => { stdout += d.toString(); });
+      ps.stderr.on('data', d => { stderr += d.toString(); });
+
+      ps.once('error', err => {
+        log(`PowerShell fallback error: ${err.code || ''} ${err.message || err}`);
+        reject(new Error(`Windows could not start ${exeName}: ${err.message}`));
+      });
+
+      ps.once('close', code => {
+        if (code === 0) {
+          const pid = parseInt(stdout.trim(), 10) || null;
+          log(`Started ${exeName} through Windows Start-Process; PID=${pid || 'unknown'}`);
+          resolve({
+            success: true,
+            pid,
+            executable: resolvedExe,
+            method: 'Start-Process',
+            message: `${exeName} launched successfully`
+          });
+        } else {
+          const detail = stderr.trim() || stdout.trim() || `exit code ${code}`;
+          log(`Start-Process failed: ${detail}`);
+          reject(new Error(`Windows could not start ${exeName}: ${detail}`));
         }
-      }
+      });
+    };
 
-      console.log('----------------------------------------');
-      console.log('SWG GHOSTS GAME LAUNCH');
-      console.log('Executable :', exePath);
-      console.log('Working Dir:', workingDirectory);
-      console.log('Shell      : false');
-      console.log('----------------------------------------');
-
-      const gameProcess = spawn(exePath, [], {
-        cwd: workingDirectory,
+    try {
+      const child = spawn(resolvedExe, [], {
+        cwd: exeDir,
         detached: true,
         stdio: 'ignore',
         shell: false,
-        windowsHide: false,
-        windowsVerbatimArguments: false
+        windowsHide: false
       });
 
-      let settled = false;
-
-      gameProcess.once('error', (err) => {
-        console.error('SWG launch failed:', err);
-        if (!settled) {
-          settled = true;
-          reject(new Error(`Unable to launch ${exeName}: ${err.message}`));
-        }
-      });
-
-      gameProcess.unref();
-
-      if (gameProcess.pid) {
-        settled = true;
+      child.once('spawn', () => {
+        log(`Started ${exeName} directly; PID=${child.pid}`);
+        try { child.unref(); } catch (_) {}
         resolve({
           success: true,
-          pid: gameProcess.pid,
-          executable: exePath,
-          workingDirectory,
+          pid: child.pid,
+          executable: resolvedExe,
+          method: 'CreateProcess',
           message: `${exeName} launched successfully`
         });
-      }
-    } catch (error) {
-      console.error('Failed to launch SWG:', error);
-      reject(new Error(`Failed to launch game: ${error.message}`));
+      });
+
+      child.once('error', err => {
+        log(`Direct CreateProcess failed: ${err.code || ''} ${err.message || err}`);
+        if (err.code === 'EACCES' || err.code === 'EPERM') {
+          startWithPowerShell();
+        } else {
+          reject(new Error(`Windows could not start ${exeName}: ${err.message}`));
+        }
+      });
+    } catch (err) {
+      log(`Direct launch exception: ${err.message}`);
+      startWithPowerShell();
     }
   });
 });
@@ -499,7 +736,8 @@ ipcMain.handle('get-settings', () => {
   const settingsPath = getSettingsPath();
   if (fs.existsSync(settingsPath)) {
     try {
-      return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      return settings;
     } catch (_) {
       return {};
     }
@@ -507,28 +745,37 @@ ipcMain.handle('get-settings', () => {
   return {};
 });
 
-ipcMain.handle('save-install-dir', (event, dir) => {
+ipcMain.handle('save-install-dir', (event, { version = 'precu', dir }) => {
   const settingsPath = getSettingsPath();
   const settings = fs.existsSync(settingsPath)
     ? JSON.parse(fs.readFileSync(settingsPath, 'utf8'))
     : {};
-  settings.installDir = dir;
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-});
 
-ipcMain.handle('get-install-dir', () => {
-  const settingsPath = getSettingsPath();
-  if (fs.existsSync(settingsPath)) {
-    try {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-      return settings.installDir || null;
-    } catch (_) {
-      return null;
-    }
+  if (version === 'nge') {
+    settings.ngeInstallDir = dir;
+  } else if (version === 'precu-testcenter') {
+    settings.precuTestCenterInstallDir = dir;
+  } else {
+    settings.precuInstallDir = dir;
   }
-  return null;
+
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+  return true;
 });
 
+ipcMain.handle('get-install-dir', (event, version = 'precu') => {
+  const settingsPath = getSettingsPath();
+  if (!fs.existsSync(settingsPath)) return null;
+
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    if (version === 'nge') return settings.ngeInstallDir || null;
+    if (version === 'precu-testcenter') return settings.precuTestCenterInstallDir || null;
+    return settings.precuInstallDir || null;
+  } catch (_) {
+    return null;
+  }
+});
 ipcMain.handle('save-scan-mode', (event, mode) => {
   const settingsPath = getSettingsPath();
   const settings = fs.existsSync(settingsPath)
@@ -599,8 +846,91 @@ ipcMain.handle('open-logs', async () => {
 // ------------------------------
 // App lifecycle
 // ------------------------------
+
+// ------------------------------
+// GitHub release auto-updater
+// ------------------------------
+function configureAutoUpdater() {
+  if (!app.isPackaged) {
+    console.log('[Updater] Development build; automatic updates disabled.');
+    return;
+  }
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowDowngrade = false;
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[Updater] Checking GitHub Releases...');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[Updater] Update available: ${info.version}`);
+    try { appendLauncherDiagnostic(`Update available: ${info.version}`); } catch (_) {}
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('launcher-update-available', { version: info.version });
+    }
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    console.log(`[Updater] Launcher is current (${info.version}).`);
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('launcher-update-progress', {
+        percent: progress.percent,
+        transferred: progress.transferred,
+        total: progress.total
+      });
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`[Updater] Update ${info.version} downloaded; it will install on exit.`);
+    try { appendLauncherDiagnostic(`Update ${info.version} downloaded.`); } catch (_) {}
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('launcher-update-downloaded', { version: info.version });
+    }
+  });
+
+  autoUpdater.on('error', (error) => {
+    console.error('[Updater] Error:', error);
+    try { appendLauncherDiagnostic(`Updater error: ${error.message || error}`); } catch (_) {}
+  });
+
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((error) => {
+      console.error('[Updater] Check failed:', error.message || error);
+    });
+  }, 3000);
+}
+
+ipcMain.handle('check-launcher-update', async () => {
+  if (!app.isPackaged) {
+    return { success: false, development: true, message: 'Updates are disabled in development builds.' };
+  }
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return {
+      success: true,
+      updateAvailable: !!result?.updateInfo,
+      version: result?.updateInfo?.version || null
+    };
+  } catch (error) {
+    return { success: false, message: error.message || String(error) };
+  }
+});
+
+ipcMain.handle('install-launcher-update', () => {
+  if (!app.isPackaged) return { success: false, development: true };
+  autoUpdater.quitAndInstall(false, true);
+  return { success: true };
+});
+
 app.whenReady().then(() => {
   createWindow();
+  configureAutoUpdater();
 
   const logPath = path.join(app.getPath('userData'), 'logs');
   if (!fs.existsSync(logPath)) fs.mkdirSync(logPath, { recursive: true });

@@ -1,0 +1,8 @@
+NGE EACCES FIX
+==============
+Direct Windows process creation is attempted first.
+If Windows returns EACCES or EPERM, the launcher falls back to
+PowerShell Start-Process with the selected NGE/PRE-CU directory as the
+working directory and reports the actual PowerShell error if it fails.
+NGE remains swgclient_r.exe; PRE-CU remains SWGEmu.exe.
+main.js passes node --check.

@@ -1,15 +1,15 @@
 {
   "name": "ghosts-launcher",
-  "version": "1.3.0",
+  "version": "1.9.1",
   "description": "SWG Ghosts Launcher",
   "main": "main.js",
   "author": "Ghosts_Dev",
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bfitzgit23/Ghosts-Launcher"
+    "url": "https://github.com/bfitzgit23/SWG-Ghosts-Launcher.git"
   },
-  "homepage": "https://51-81-81-116.sslip.io",
+  "homepage": "https://swg-ghosts.example.invalid",
   "keywords": [
     "launcher",
     "installer",
@@ -23,10 +23,11 @@
   ],
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win --x64 -p never",
+    "build:win": "electron-builder --win --x64",
     "deploy:win": "electron-builder --win --x64 -p always",
     "build:linux": "electron-builder --linux --x64",
-    "build:mac": "electron-builder --mac --x64"
+    "build:mac": "electron-builder --mac --x64",
+    "publish:win": "node scripts/publish-win.js"
   },
   "devDependencies": {
     "electron": "^27.3.11",
@@ -89,6 +90,12 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "bfitzgit23",
+      "repo": "SWG-Ghosts-Launcher",
+      "releaseType": "release"
     }
   },
   "appId": "com.Ghosts.launcher",
