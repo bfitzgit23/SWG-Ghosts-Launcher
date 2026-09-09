@@ -1,6 +1,6 @@
 {
   "name": "ghosts-launcher",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "SWG Ghosts Launcher",
   "main": "main.js",
   "author": "Ghosts_Dev",
@@ -54,6 +54,7 @@
   "build": {
     "appId": "com.Ghosts.launcher",
     "productName": "Ghosts Launcher",
+    "asar": false,
     "directories": {
       "buildResources": "build",
       "output": "dist"
