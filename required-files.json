@@ -1,0 +1,62 @@
+[
+  {
+    "name": "SWGEmu.exe.patched",
+    "size": 22875328,
+    "md5": "8f1da870949f04e7a9ef29bc9e1e3d7a"
+  },
+  {
+    "name": "swg_icon.ico",
+    "size": 197163,
+    "md5": "bdf28ba31d9a56fa378fd8eee989320e"
+  },
+  {
+    "name": "pe_icon_injector.py",
+    "size": 8126,
+    "md5": "b6c346b504604dd8e350e3a8fa1e4f63"
+  },
+  {
+    "name": "validate_patched_exe.py",
+    "size": 1808,
+    "md5": "5a22cd2c945dacfd603e54c7c3acdd5a"
+  },
+  {
+    "name": "parse_pe.py",
+    "size": 1829,
+    "md5": "b63d026ae4b3ac8bca7ada7307e1fcdd"
+  },
+  {
+    "name": "swgemu_live.cfg",
+    "size": 4079,
+    "md5": "1799b4afca68a526342a894eb9a84679"
+  },
+  {
+    "name": "swgemu_login.cfg",
+    "size": 95,
+    "md5": "5e752c45d8503d4838a36f47d9d19b38"
+  },
+  {
+    "name": "swgemu_preload.cfg",
+    "size": 2018,
+    "md5": "0afeddc346edfb136bf55315f002f45a"
+  },
+  {
+    "name": "swgemu.cfg",
+    "size": 134,
+    "md5": "35ac9f1d3e1bb05432f5f52cfcba46f0"
+  },
+  {
+    "name": "user.cfg",
+    "size": 174,
+    "md5": "165c4e4c5fdaeed7d006e1f186ccf76f"
+  },
+  {
+    "name": "options.cfg",
+    "size": 479,
+    "md5": "3283f1e8aa0b77a79fd06de44e77fa38"
+  },
+  {
+    "name": "Ghosts-Cinematic-Screenshots.ini",
+    "size": 8633,
+    "md5": "43a9501cb42c3672be2b31d2c544fe9d"
+  }
+]

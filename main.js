@@ -16,9 +16,12 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 let mainWindow;
 
 // Keep ONE source of truth for your patch base
-const PRECU_BASE_URL = 'https://212.28.185.14.sslip.io/tre/';
-const NGE_BASE_URL = 'https://212.28.185.14.sslip.io/tre/nge/';
+const PRECU_BASE_URL = 'https://cmagnos.ddns.net/tre/';
+const NGE_BASE_URL = 'https://cmagnos.ddns.net/tre/nge/';
 const PRECU_TESTCENTER_LOGIN_IP = '212.28.185.14';
+const SWGEmu_EXE_FILENAME = 'SWGEmu.exe';
+const SWGEmu_EXE_ALT_FILENAMES = ['SWGEmu.exe', 'SWGEmu.exe.patched', 'swgemu.exe'];
+const SWGEmu_EXE_SERVER_SRC = 'SWGEmu.exe.patched';
 
 function toggleFullscreen(win) {
   if (!win || win.isDestroyed()) return;
