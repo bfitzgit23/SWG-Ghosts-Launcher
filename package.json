@@ -1,6 +1,6 @@
 {
   "name": "ghosts-launcher",
-  "version": "1.9.4",
+  "version": "1.9.7",
   "description": "SWG Ghosts Launcher",
   "main": "main.js",
   "author": "Ghosts_Dev",
@@ -93,10 +93,9 @@
       "createStartMenuShortcut": true
     },
     "publish": {
-      "provider": "github",
-      "owner": "bfitzgit23",
-      "repo": "SWG-Ghosts-Launcher",
-      "releaseType": "release"
+      "provider": "generic",
+      "url": "http://212.28.185.14/server-files/launcher/",
+      "channel": "latest"
     }
   },
   "appId": "com.Ghosts.launcher",
