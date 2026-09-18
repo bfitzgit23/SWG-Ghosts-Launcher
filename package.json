@@ -7,9 +7,9 @@
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bfitzgit23/SWG-Ghosts-Launcher.git"
+    "url": "https://github.com"
   },
-  "homepage": "https://swg-ghosts.example.invalid",
+  "homepage": "https://example.invalid",
   "keywords": [
     "launcher",
     "installer",
@@ -26,6 +26,7 @@
     "build:win": "electron-builder --win --x64",
     "deploy:win": "electron-builder --win --x64 -p always",
     "build:linux": "electron-builder --linux --x64",
+    "deploy:linux": "electron-builder --linux --x64 -p always",
     "build:mac": "electron-builder --mac --x64",
     "publish:win": "node scripts/publish-win.js"
   },
@@ -94,7 +95,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "http://212.28.185.14/server-files/launcher/",
+      "url": "http://212.28.185",
       "channel": "latest"
     }
   },
