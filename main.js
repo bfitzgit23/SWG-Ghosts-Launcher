@@ -1,4 +1,4 @@
-// main.js - SWG Ghosts Launcher (Linux AppImage / Wine Compatible)
+// main.js - SWG Ghosts Launcher (Linux AppImage / Wine & Proton Cross-Compatibility Layer)
 // 1920x1080 design, DPI/Zoom lock, sane sizing, F11 fullscreen toggle, window control IPC
 
 const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
@@ -37,6 +37,7 @@ function createWindow() {
     frame: false,
     transparent: true,
 
+    // Allow resize for smaller screens; enforce minimum so it never becomes portrait-tiny
     resizable: true,
     minimizable: true,
     maximizable: true,
@@ -67,18 +68,21 @@ function createWindow() {
 
   // ---- Hotkeys (F11) + block Ctrl zoom ----
   mainWindow.webContents.on('before-input-event', (event, input) => {
+    // F11 fullscreen toggle (borderless fullscreen since frame:false)
     if (input.type === 'keyDown' && input.key === 'F11') {
       event.preventDefault();
       toggleFullscreen(mainWindow);
       return;
     }
 
+    // Block Ctrl zoom
     if (input.control && (input.key === '+' || input.key === '-' || input.key === '=' || input.key === '0')) {
       event.preventDefault();
       return;
     }
   });
 
+  // Force a sane starting size every time (fit on smaller displays)
   mainWindow.once('ready-to-show', () => {
     try {
       const display = screen.getPrimaryDisplay();
@@ -93,6 +97,7 @@ function createWindow() {
       mainWindow.center();
       mainWindow.show();
 
+      // Extra guard against weird WM restores
       const [cw, ch] = mainWindow.getContentSize();
       if (cw < 1000 || ch < 600) {
         mainWindow.setContentSize(1280, 720);
@@ -102,9 +107,15 @@ function createWindow() {
       mainWindow.show();
     }
   });
+
+  // Optional: log fullscreen changes
+  mainWindow.on('enter-full-screen', () => console.log('Entered fullscreen'));
+  mainWindow.on('leave-full-screen', () => console.log('Left fullscreen'));
 }
 
+// ------------------------------
 // Window Controls via IPC
+// ------------------------------
 ipcMain.handle('window:minimize', () => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
 });
@@ -133,11 +144,14 @@ ipcMain.handle('window:isFullscreen', () => {
   return mainWindow.isFullScreen();
 });
 
+// ------------------------------
 // Load required files from server
+// ------------------------------
 ipcMain.handle('load-required-files', async (event, version = 'precu') => {
   return new Promise((resolve, reject) => {
     const baseUrl = version === 'nge' ? NGE_BASE_URL : PRECU_BASE_URL;
     const url = baseUrl + 'required-files.json';
+    console.log(`Loading ${version.toUpperCase()} files from: ${url}`);
 
     const client = url.startsWith('https://') ? https : http;
     const req = client.get(url, (response) => {
@@ -181,25 +195,34 @@ function parseRequiredFiles(data, resolve, reject) {
     if (!Array.isArray(jsonData)) throw new Error('File list is not an array');
 
     const validData = jsonData.filter((item) =>
-      item && item.name && typeof item.name === 'string' && item.name.trim() !== '' && item.md5
+      item &&
+      item.name &&
+      typeof item.name === 'string' &&
+      item.name.trim() !== '' &&
+      item.md5
     ).map(item => ({
       ...item,
       size: Number.isFinite(Number(item.size)) ? Number(item.size) : 0
     }));
 
+    console.log(`Loaded ${validData.length} valid files from server`);
     resolve(validData);
   } catch (error) {
+    console.error('JSON parse error:', error);
     reject(new Error('Failed to parse JSON: ' + error.message));
   }
 }
 
+// --------------
 // Check MD5
+// --------------
 ipcMain.handle('check-md5', async (event, filePath) => {
   return new Promise((resolve, reject) => {
     if (!filePath || typeof filePath !== 'string') {
       reject(new Error('Invalid file path'));
       return;
     }
+
     if (!fs.existsSync(filePath)) {
       reject(new Error('File does not exist: ' + filePath));
       return;
@@ -207,13 +230,16 @@ ipcMain.handle('check-md5', async (event, filePath) => {
 
     const hash = crypto.createHash('md5');
     const stream = fs.createReadStream(filePath);
+
     stream.on('data', (data) => hash.update(data));
     stream.on('end', () => resolve(hash.digest('hex')));
     stream.on('error', reject);
   });
 });
 
+// ------------------------------
 // Download file with progress
+// ------------------------------
 ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, size }) => {
   return new Promise((resolve, reject) => {
     if (!url || !destination) {
@@ -224,7 +250,10 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, s
     const dir = path.dirname(destination);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
+    // NEVER write directly over a working game executable/configuration.
+    // A failed download or MD5 check must not delete the user's current file.
     const tempPath = destination + `.ghosts-download-${process.pid}-${Date.now()}.tmp`;
+
     const cleanupTemp = () => {
       try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (_) {}
     };
@@ -239,6 +268,8 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, s
       const client = requestUrl.startsWith('https://') ? https : http;
       const file = fs.createWriteStream(tempPath);
       let downloadedBytes = 0;
+
+      console.log(`Downloading: ${requestUrl} to temporary file ${tempPath}`);
 
       const req = client.get(requestUrl, (response) => {
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
@@ -273,39 +304,3 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, s
 
         response.pipe(file);
 
-        file.on('finish', () => {
-          file.close();
-
-          if (!expectedMd5) {
-            try {
-              fs.renameSync(tempPath, destination);
-              resolve({ path: destination });
-            } catch (error) {
-              cleanupTemp();
-              reject(error);
-            }
-            return;
-          }
-
-          const hash = crypto.createHash('md5');
-          const readStream = fs.createReadStream(tempPath);
-
-          readStream.on('data', (data) => hash.update(data));
-          readStream.on('end', () => {
-            const downloadedMd5 = hash.digest('hex').toLowerCase();
-            const expected = String(expectedMd5).toLowerCase();
-
-            if (downloadedMd5 !== expected) {
-              cleanupTemp();
-              reject(new Error(`MD5 mismatch: expected ${expected}, got ${downloadedMd5}.`));
-              return;
-            }
-
-            try {
-              const backupPath = destination + '.ghosts-old';
-              if (fs.existsSync(backupPath)) {
-                try { fs.unlinkSync(backupPath); } catch (_) {}
-              }
-
-              if (fs.existsSync(destination)) {
-                try {
