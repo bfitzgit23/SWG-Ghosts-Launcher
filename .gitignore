@@ -2,3 +2,5 @@ dist/*
 dist
 node_modules/*
 node_modules
+# Site release script (box/dev machine only - names the host and its paths)
+scripts/publish-site.sh
