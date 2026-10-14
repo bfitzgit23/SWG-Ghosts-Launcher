@@ -233,6 +233,34 @@
       color: var(--green);
     }
 
+    /* Game version picker: the panel had no text colour of its own, so the
+       heading and status line rendered near-black on the dark background. */
+    .side-buttons label,
+    .setting-group > label {
+      color: #F2FBFF !important;
+      text-shadow: 0 0 6px rgba(85, 223, 255, 0.20);
+    }
+
+    .setting-group > label {
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 1.2px;
+    }
+
+    .side-buttons .version-option span,
+    .version-option {
+      color: #FFFFFF !important;
+    }
+
+    #current-version {
+      color: #BFEFFF !important;
+      font-weight: 600;
+    }
+
+    #current-directory {
+      color: #9FD8F0 !important;
+    }
+
     #current-directory {
       font-size: 12px;
       color: #aaa;
@@ -593,18 +621,28 @@
     <div class="side-buttons">
       <button class="side-button" id="quick-scan">QUICK SCAN</button>
       <button class="side-button" id="full-scan">FULL SCAN (RECHECK ALL)</button>
+      <button class="side-button" id="client-setup" title="Open the client's own graphics/sound options utility">CLIENT SETUP</button>
       <div class="setting-group" style="margin-bottom:12px;">
-        <label for="game-version-select" style="display:block; margin-bottom:6px;">GAME VERSION</label>
-        <select id="game-version-select" class="setting-select">
-          <option value="precu">SWG GHOSTS — PRE-CU</option>
-           <option value="precu-testcenter">SWG GHOSTS — PRE-CU TEST CENTER</option>
-          <option value="nge">SWG GHOSTS — NGE</option>
-        </select>
+        <label style="display:block; margin-bottom:6px;">GAME VERSION</label>
+        <div id="game-version-group" style="display:flex; flex-direction:column; gap:6px;">
+          <label class="version-option" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#FFFFFF; font-size:15px; font-weight:700;">
+            <input type="radio" name="game-version" value="precu" class="version-radio" style="accent-color:#4a9eff; width:16px; height:16px;">
+            <span>SWG GHOSTS — PRE-CU</span>
+          </label>
+          <label class="version-option" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#FFFFFF; font-size:15px; font-weight:700;">
+            <input type="radio" name="game-version" value="precu-testcenter" class="version-radio" style="accent-color:#4a9eff; width:16px; height:16px;">
+            <span>SWG GHOSTS — PRE-CU TEST CENTER</span>
+          </label>
+          <label class="version-option" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#FFFFFF; font-size:15px; font-weight:700;">
+            <input type="radio" name="game-version" value="nge" class="version-radio" style="accent-color:#4a9eff; width:16px; height:16px;">
+            <span>SWG GHOSTS — NGE</span>
+          </label>
+        </div>
       </div>
       <button class="side-button" id="install-location">INSTALL LOCATION</button>
       <button class="side-button" id="settings-button">SETTINGS</button>
 
-      <div id="current-version" class="status-text" style="margin-bottom:4px;">Version: PRE-CU</div>
+      <div id="current-version" class="status-text" style="margin-bottom:4px; color:#BFEFFF; font-weight:600;">Version: PRE-CU</div>
       <div id="current-directory"></div>
 
       <div class="button-group">

@@ -1,13 +1,13 @@
 {
   "name": "ghosts-launcher",
-  "version": "1.9.7",
+  "version": "2.2.3",
   "description": "SWG Ghosts Launcher",
   "main": "main.js",
   "author": "Ghosts_Dev",
   "license": "CC0-1.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com"
+    "url": "https://github.com/bfitzgit23/SWG-Ghosts-Launcher.git"
   },
   "homepage": "https://example.invalid",
   "keywords": [
@@ -28,7 +28,9 @@
     "build:linux": "electron-builder --linux --x64",
     "deploy:linux": "electron-builder --linux --x64 -p always",
     "build:mac": "electron-builder --mac --x64",
-    "publish:win": "node scripts/publish-win.js"
+    "publish:win": "node scripts/publish-win.js",
+    "publish:github": "node scripts/publish-github.js",
+    "test:updater": "node scripts/updater-selftest.js"
   },
   "devDependencies": {
     "electron": "^27.3.11",
@@ -95,7 +97,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "http://212.28.185",
+      "url": "https://swg-ghosts.online/launcher",
       "channel": "latest"
     }
   },

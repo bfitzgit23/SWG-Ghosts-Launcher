@@ -13,8 +13,13 @@ window.addEventListener('DOMContentLoaded', () => {
   const playButton = document.getElementById('play-button');
   const quickScanButton = document.getElementById('quick-scan');
   const fullScanButton = document.getElementById('full-scan');
+  const clientSetupButton = document.getElementById('client-setup');
   const installLocationButton = document.getElementById('install-location');
-  const gameVersionSelect = document.getElementById('game-version-select');
+  const gameVersionRadios = Array.from(document.querySelectorAll('input[name="game-version"]'));
+  function selectedGameVersion() {
+    const checked = gameVersionRadios.find(r => r.checked);
+    return checked ? checked.value : 'precu';
+  }
   const currentVersionElement = document.getElementById('current-version');
   const settingsButton = document.getElementById('settings-button');
   const pauseButton = document.getElementById('pause-button');
@@ -144,6 +149,12 @@ window.addEventListener('DOMContentLoaded', () => {
       const scanMode = await ipcRenderer.invoke('get-scan-mode');
       scanModeSelect.value = scanMode || 'quick';
 
+      const savedVersion = await ipcRenderer.invoke('get-game-version');
+      if (savedVersion) {
+        const radio = gameVersionRadios.find(r => r.value === savedVersion);
+        if (radio) radio.checked = true;
+      }
+
       const settings = await ipcRenderer.invoke('get-settings');
       if (settings) {
         autoLaunchCheckbox.checked = settings.autoLaunch || false;
@@ -198,8 +209,17 @@ window.addEventListener('DOMContentLoaded', () => {
     return version === 'nge' ? 'NGE' : (version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU');
   }
 
+  function versionValidExe(version, lowerName) {
+    return version === 'nge' ? lowerName === 'swgclient_r.exe' : lowerName === 'swgemu.exe';
+  }
+
+  function versionExeSettingKey(version) {
+    return version === 'nge' ? 'ngeExecutable'
+      : (version === 'precu-testcenter' ? 'precuTestCenterExecutable' : 'precuExecutable');
+  }
+
   async function loadVersionInstallDir() {
-    gameVersion = gameVersionSelect.value || 'precu';
+    gameVersion = selectedGameVersion();
 
     try {
       const settings = await ipcRenderer.invoke('get-settings') || {};
@@ -244,21 +264,33 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  gameVersionSelect.addEventListener('change', async () => {
+  gameVersionRadios.forEach(radio => radio.addEventListener('change', async () => {
+    if (!radio.checked) return;
+    await ipcRenderer.invoke('save-game-version', radio.value);
     installDir = null;
     await loadVersionInstallDir();
-  });
+  }));
   installLocationButton.addEventListener('click', showInstallLocationDialog);
 
   // ------------------------------
   // Launcher auto-update notifications
   // ------------------------------
   ipcRenderer.on('launcher-update-available', (_event, info) => {
-    updateStatus(`Launcher update ${info.version} downloading...`);
+    updateStatus(`Launcher update ${info.version} downloading from ${info.feed || 'the update feed'}...`);
+  });
+
+  ipcRenderer.on('launcher-update-progress', (_event, info) => {
+    const percent = Math.round(info.percent || 0);
+    updateStatus(`Downloading launcher update... ${percent}%`);
   });
 
   ipcRenderer.on('launcher-update-downloaded', (_event, info) => {
     updateStatus(`Launcher update ${info.version} ready — it will install when the launcher closes.`);
+  });
+
+  ipcRenderer.on('launcher-update-error', (_event, info) => {
+    // Every feed failed (or none answered). Say so instead of sitting silently.
+    updateStatus(`Launcher update check failed (${info.feed || 'update feed'}): ${info.message || 'unknown error'}`);
   });
 
   // ------------------------------
@@ -295,9 +327,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const pickedDir = path.dirname(picked);
         const pickedName = path.basename(picked).toLowerCase();
 
-        const valid = gameVersion === 'nge'
-          ? pickedName === 'swgclient_r.exe'
-          : pickedName === 'swgemu.exe';
+        const valid = versionValidExe(gameVersion, pickedName);
 
         if (!valid) {
           updateStatus(
@@ -316,9 +346,7 @@ window.addEventListener('DOMContentLoaded', () => {
           dir: installDir
         });
         await ipcRenderer.invoke('save-settings', {
-          [gameVersion === 'nge'
-            ? 'ngeExecutable'
-            : (gameVersion === 'precu-testcenter' ? 'precuTestCenterExecutable' : 'precuExecutable')]: picked
+          [versionExeSettingKey(gameVersion)]: picked
         });
 
         diagnostic = {
@@ -334,13 +362,38 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Before launching any profile, perform a full manifest scan. This is
-      // especially important for NGE: a missing client DLL/config/asset can
-      // result in the game generating .dmp/.mdmp crash files instead of a
-      // useful launcher error.
+      // Before launching any profile, perform a full manifest scan: a missing
+      // client DLL/config/asset can result in the game generating .dmp/.mdmp
+      // crash files instead of a useful launcher error (e.g. "FATAL: failed to
+      // open tree file").
       updateStatus(`Verifying complete ${versionLabel(gameVersion)} client...`);
-// The executable may live in a subdirectory. Re-resolve it after the
+      let scan = await runFullScanForLaunch();
+      if (!scan.success) {
+        // One retry pass: the verify cache skips files that already passed, so
+        // this re-attempts only the missing/failed downloads. Covers transient
+        // connection drops without blocking Play over a single flaky request.
+        updateStatus(`Verification had errors — retrying once...`);
+        scan = await runFullScanForLaunch();
+      }
+      if (!scan.success) {
+        const failedList = Array.isArray(scan.failed) && scan.failed.length
+          ? ` ${summarizeFailedFiles(scan.failed)}.`
+          : '';
+        throw new Error(
+          `Client verification failed: ${scan.errors} problem(s).${failedList} ` +
+          verificationHint(scan.failed)
+        );
+      }
+
+      // The executable may live in a subdirectory. Re-resolve it after the
       // scan instead of assuming it is directly under the install root.
+      diagnostic = await ipcRenderer.invoke('check-installation', {
+        version: gameVersion,
+        dir: installDir
+      });
+      if (diagnostic && diagnostic.ok && diagnostic.executable) {
+        exePath = diagnostic.executable;
+      }
 
       const foundExeName = path.basename(exePath);
 
@@ -360,7 +413,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
 
       updateStatus(`Launching ${versionLabel(gameVersion)} — ${foundExeName}...`);
-      const result = await ipcRenderer.invoke('launch-game', exePath);
+      const result = await ipcRenderer.invoke('launch-game', exePath, installDir);
 
       if (result && result.success) {
         updateStatus(`${versionLabel(gameVersion)} launched successfully`);
@@ -391,8 +444,39 @@ window.addEventListener('DOMContentLoaded', () => {
       showInstallLocationDialog();
       return;
     }
+    // Full means full: every file is re-read, ignoring the verification cache.
     startScan('full');
   });
+
+  // ------------------------------
+  // Client setup utility
+  // ------------------------------
+  // Opens SwgClientSetup_r.exe from the selected installation. The main process
+  // resolves it (nested layouts included) and starts it with the same
+  // never-elevated rule the game client uses.
+  if (clientSetupButton) {
+    clientSetupButton.addEventListener('click', async () => {
+      if (!installDir) {
+        updateStatus('Please set an install location first');
+        showInstallLocationDialog();
+        return;
+      }
+
+      try {
+        updateStatus('Opening the client setup utility...');
+        const result = await ipcRenderer.invoke('launch-client-setup', { dir: installDir });
+
+        if (result && result.success) {
+          const name = path.basename(result.setup || 'SwgClientSetup_r.exe');
+          updateStatus(`${name} opened`);
+        } else {
+          updateStatus(`Client setup unavailable: ${(result && result.error) || 'unknown error'}`);
+        }
+      } catch (error) {
+        updateStatus(`Client setup failed: ${error.message}`);
+      }
+    });
+  }
 
   pauseButton.addEventListener('click', () => {
     isPaused = !isPaused;
@@ -435,6 +519,70 @@ window.addEventListener('DOMContentLoaded', () => {
     return enhancedGraphicsEnabled || !isEnhancedGraphicsFile(file);
   }
 
+  // Manifest names come from the file host, so they are not guaranteed to be
+  // URL-safe. Requesting one segment at a time and escaping each keeps names
+  // with spaces or '#' fetchable (a raw '#' would be read as a fragment).
+  function encodeManifestName(name) {
+    return String(name == null ? '' : name)
+      .replace(/\\/g, '/')
+      .replace(/^[/\\]+/, '')
+      .split('/')
+      .map(segment => encodeURIComponent(segment))
+      .join('/');
+  }
+
+  // ipcRenderer.invoke() re-wraps whatever the main process rejected, e.g.
+  // "Error invoking remote method 'download-file': Error: HTTP 404". Strip the
+  // wrapper so the player sees the real cause.
+  function describeIpcError(error) {
+    return String((error && error.message) || error || 'unknown error')
+      .replace(/^Error invoking remote method '[^']*':\s*/, '')
+      .replace(/^Error:\s*/, '');
+  }
+
+  // "name (reason), name (reason)" - the point of naming them is that the old
+  // message only said how many files failed.
+  function summarizeFailedFiles(failed, limit = 3) {
+    const list = Array.isArray(failed) ? failed : [];
+    const shown = list.slice(0, limit)
+      .map(entry => (entry && entry.reason ? `${entry.name} (${entry.reason})` : String((entry && entry.name) || entry)))
+      .join(', ');
+    return list.length > limit ? `${shown} (+${list.length - limit} more)` : shown;
+  }
+
+  // The advice has to match the cause: telling someone to check their
+  // connection when the file host serves bytes that disagree with its own
+  // manifest sends them round a loop that can never succeed.
+  function verificationHint(failed) {
+    const reasons = (Array.isArray(failed) ? failed : [])
+      .map(entry => String((entry && entry.reason) || '').toLowerCase());
+    const network = reasons.some(r => /timeout|timed out|econnreset|socket|network|refused|unreachable|http 5\d\d|http 429/.test(r));
+    const checksum = reasons.some(r => r.includes('md5'));
+
+    if (checksum && !network) {
+      return 'The file host served bytes that do not match the checksums in its own manifest, so these files cannot be repaired from the client side. Press Play after the manifest is refreshed on the server.';
+    }
+    if (checksum && network) {
+      return 'Check your connection and press Play again; if the same files fail, the file host manifest is out of date.';
+    }
+    if (network) {
+      return 'Check your connection and press Play again.';
+    }
+    return 'Run a scan, then press Play again.';
+  }
+
+  function versionManifestUrl(version) {
+    return version === 'nge'
+      ? 'https://swg-ghosts.online/tre/nge/required-files.json'
+      : 'https://swg-ghosts.online/tre/required-files.json';
+  }
+
+  function versionFileUrl(version) {
+    return version === 'nge'
+      ? 'https://swg-ghosts.online/tre/nge/'
+      : 'https://swg-ghosts.online/tre/';
+  }
+
   async function loadPatchFiles() {
     const selectedFiles = await ipcRenderer.invoke('load-required-files', gameVersion);
     if (!Array.isArray(selectedFiles)) return [];
@@ -471,7 +619,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      // Enhanced files live in the shared /tre/ tree even when NGE is selected.
+      // Enhanced files live in the shared /tre/ tree.
       const files = await ipcRenderer.invoke('load-required-files', 'precu');
       const enhancedFiles = Array.isArray(files) ? files.filter(isEnhancedGraphicsFile) : [];
       if (!enhancedFiles.length) {
@@ -495,7 +643,10 @@ window.addEventListener('DOMContentLoaded', () => {
           } catch (_) {}
         }
 
-        if (!valid && !(await downloadFile(file, localPath, true))) errors++;
+        if (!valid) {
+          const result = await downloadFile(file, localPath, true);
+          if (!result.ok) errors++;
+        }
       }
 
       updateStatus(errors === 0
@@ -508,57 +659,186 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ------------------------------
+  // Patch reconciliation
+  // ------------------------------
+  // Scanning used to hash every manifest file one at a time and then download
+  // strictly sequentially. Neither scale to a multi-gigabyte client, so both are
+  // now done through bounded worker pools, and the hashing itself happens in the
+  // main process (see `verify-files`) where it can run several files at once.
+  const DOWNLOAD_CONCURRENCY = 4;
+  const VERIFY_CONCURRENCY = 8;
+
+  function normalizeManifestName(name) {
+    return String(name || '').replace(/\\/g, '/').replace(/^[/\\]+/, '');
+  }
+
+  // Local user state is never overwritten — but it is allowed to download when
+  // it does not exist yet, which is what makes a fresh install work.
+  function isProtectedLocalFile(lowerName, localPath, preserveExecutable) {
+    const localStateFile =
+      ['options.cfg', 'user.cfg', 'swgemu.cfg', 'swgemu_machineoptions.iff',
+       'swgemu_login.cfg', 'login.cfg', 'swgemu_preload.cfg',
+       'live.cfg', 'local_machine_options.iff'].includes(lowerName);
+
+    if (localStateFile && fs.existsSync(localPath)) return true;
+    if (lowerName.startsWith('profiles/') && fs.existsSync(localPath)) return true;
+    if (preserveExecutable &&
+        (lowerName === 'swgclient_r.exe' || lowerName === 'swgemu.exe') &&
+        fs.existsSync(localPath)) return true;
+
+    return false;
+  }
+
+  // Bounded-concurrency worker pool: keeps N jobs in flight, reusing the same
+  // helpers for downloads so both phases behave the same way.
+  async function runPool(items, worker, concurrency) {
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) return [];
+
+    const results = new Array(list.length);
+    let next = 0;
+    const workers = Math.max(1, Math.min(Number(concurrency) || 1, list.length));
+
+    async function run() {
+      for (;;) {
+        const index = next++;
+        if (index >= list.length) return;
+        try {
+          results[index] = { ok: true, value: await worker(list[index], index) };
+        } catch (error) {
+          results[index] = { ok: false, error };
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: workers }, run));
+    return results;
+  }
+
+  // Verify the whole manifest in one batched call, then download only what
+  // failed. `useCache` false forces every byte to be re-read.
+  async function reconcile(files, options) {
+    const opts = options || {};
+    const useCache = opts.useCache !== false;
+    const label = opts.label || 'Scan';
+    const preserveExecutable = opts.preserveExecutable === true;
+
+    const verifyTargets = [];
+    const missing = [];
+    let preserved = 0;
+
+    for (const file of files) {
+      if (!shouldPatchFile(file)) continue;
+
+      const normalizedName = normalizeManifestName(file.name);
+      const localPath = path.join(installDir, normalizedName);
+      const lowerName = normalizedName.toLowerCase();
+
+      if (isProtectedLocalFile(lowerName, localPath, preserveExecutable)) {
+        preserved++;
+        continue;
+      }
+
+      if (!fs.existsSync(localPath)) {
+        missing.push({ file, localPath, normalizedName });
+      } else {
+        verifyTargets.push({ file, localPath, normalizedName });
+      }
+    }
+
+    updateStatus(
+      `${label}: verifying ${verifyTargets.length} file(s)` +
+      (useCache ? '...' : ' — forced recheck, reading every file...')
+    );
+
+    let verifications = [];
+    if (verifyTargets.length) {
+      verifications = await ipcRenderer.invoke('verify-files', {
+        entries: verifyTargets.map(t => ({
+          filePath: t.localPath,
+          expectedMd5: t.file.md5,
+          size: t.file.size
+        })),
+        useCache,
+        concurrency: VERIFY_CONCURRENCY
+      });
+    }
+
+    const toDownload = [];
+    let verified = 0;
+    let cacheHits = 0;
+
+    for (let i = 0; i < verifyTargets.length; i++) {
+      const res = verifications[i] || {};
+      if (res.status === 'ok') {
+        verified++;
+        if (res.cached) cacheHits++;
+      } else {
+        toDownload.push(verifyTargets[i]);
+      }
+    }
+    for (const entry of missing) toDownload.push(entry);
+
+    let errors = 0;
+    const failed = [];
+    if (toDownload.length) {
+      updateStatus(`${label}: downloading ${toDownload.length} file(s) (${DOWNLOAD_CONCURRENCY} in parallel)`);
+
+      let done = 0;
+      await runPool(toDownload, async (target) => {
+        if (isPaused) {
+          while (isPaused) await new Promise(r => setTimeout(r, 120));
+        }
+        const result = await downloadFile(target.file, target.localPath, isEnhancedGraphicsFile(target.file));
+        if (!result.ok) {
+          errors++;
+          failed.push({
+            name: String(target.file && target.file.name ? target.file.name : 'unknown file'),
+            reason: result.reason || 'download failed'
+          });
+        }
+        done++;
+        updateProgress(done, toDownload.length, 'total');
+        return result.ok;
+      }, DOWNLOAD_CONCURRENCY);
+
+      updateStatus(`${label}: ${done} file(s) processed`);
+    }
+
+    return {
+      verified,
+      cacheHits,
+      downloaded: toDownload.length,
+      errors,
+      failed,
+      failedNames: failed.map(entry => entry.name),
+      preserved,
+      total: verifyTargets.length + missing.length
+    };
+  }
+
   async function runFullScanForLaunch() {
-    if (!installDir) return { success: false, errors: 1 };
+    if (!installDir) return { success: false, errors: 1, failed: [{ name: 'install location', reason: 'no install directory is selected' }] };
 
     try {
       const files = await loadPatchFiles();
       if (!Array.isArray(files) || files.length === 0) {
-        return { success: false, errors: 1 };
+        return {
+          success: false,
+          errors: 1,
+          failed: [{ name: 'file manifest', reason: 'the file list could not be loaded from the server' }]
+        };
       }
 
-      let errors = 0;
-      let missing = 0;
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!shouldPatchFile(file)) {
-          updateProgress(i + 1, files.length, 'total');
-          continue;
-        }
-        const normalizedName = String(file.name || '')
-          .replace(/\\/g, '/')
-          .replace(/^[/\\]+/, '');
-        const localPath = path.join(installDir, normalizedName);
-        const lowerName = normalizedName.toLowerCase();
-
-        // Existing local user state is intentionally preserved. If the file
-        // exists, it is considered locally owned; if it does not exist on a
-        // fresh install, it must be downloaded from the manifest.
-        const localStateFile =
-          ['options.cfg','user.cfg','swgemu.cfg','swgemu_machineoptions.iff',
-           'swgemu_login.cfg','login.cfg','swgemu_preload.cfg'].includes(lowerName);
-        const preserveExisting =
-          (localStateFile && fs.existsSync(localPath)) ||
-          (lowerName.startsWith('profiles/') && fs.existsSync(localPath));
-
-        if (preserveExisting) continue;
-
-        let valid = false;
-        if (fs.existsSync(localPath)) {
-          try {
-            const md5 = await ipcRenderer.invoke('check-md5', localPath);
-            valid = String(md5).toLowerCase() === String(file.md5).toLowerCase();
-          } catch (_) {}
-        }
-
-        if (!valid) {
-          if (!fs.existsSync(localPath)) missing++;
-          if (!(await downloadFile(file, localPath, isEnhancedGraphicsFile(file)))) errors++;
-        }
-
-        updateProgress(i + 1, files.length, 'total');
-      }
+      // Pre-launch runs on the cached result: a file whose size and mtime are
+      // unchanged since it was last verified against the same hash cannot have
+      // changed, so there is no reason to re-read several gigabytes every time
+      // the player presses Play.
+      const outcome = await reconcile(files, {
+        useCache: true,
+        label: 'Pre-launch scan'
+      });
 
       // Re-check using the main-process executable resolver. This supports
       // nested client layouts and all supported case variants.
@@ -566,12 +846,24 @@ window.addEventListener('DOMContentLoaded', () => {
         version: gameVersion,
         dir: installDir
       });
-      if (!diag.ok) errors++;
+      if (!diag.ok) {
+        outcome.errors++;
+        outcome.failed.push({
+          name: diag.expected || 'client executable',
+          reason: diag.message || diag.error || 'not found in the install directory'
+        });
+      }
 
-      return { success: errors === 0, errors: errors + missing };
+      // Carry the offending file names and causes up to the Play button so the
+      // error it shows says what is actually wrong.
+      return { success: outcome.errors === 0, errors: outcome.errors, failed: outcome.failed };
     } catch (error) {
       console.error('Pre-launch full scan failed:', error);
-      return { success: false, errors: 1 };
+      return {
+        success: false,
+        errors: 1,
+        failed: [{ name: 'pre-launch scan', reason: describeIpcError(error) }]
+      };
     }
   }
 
@@ -599,74 +891,37 @@ window.addEventListener('DOMContentLoaded', () => {
         );
       }
 
-      let verifiedCount = 0;
-      let downloadedCount = 0;
-      let errorCount = 0;
+      // Quick: trust files unchanged since their last successful verification.
+      // Full: re-read every file, so this is the genuine "recheck all".
+      const outcome = await reconcile(files, {
+        useCache: mode !== 'full',
+        preserveExecutable: true,
+        label: mode === 'full' ? 'Full scan' : 'Quick scan'
+      });
 
-      for (let i = 0; i < files.length; i++) {
-        if (isPaused) {
-          updateStatus('Scan paused. Click Resume to continue.');
-          while (isPaused) await new Promise(r => setTimeout(r, 100));
-          updateStatus('Resuming scan...');
+      // A fresh install has no options.cfg (the channel does not ship one, so each
+      // machine keeps its own mode). Ask the main process to seed it from this
+      // machine's desktop mode; an existing file is never touched.
+      let machineNote = '';
+      try {
+        const state = await ipcRenderer.invoke('ensure-machine-state', { dir: installDir });
+        if (state && state.created) {
+          machineNote = ` Wrote options.cfg for this machine: ${state.display.width}x${state.display.height}.`;
         }
-
-        const file = files[i];
-        if (!shouldPatchFile(file)) {
-          updateProgress(i + 1, files.length, 'total');
-          continue;
-        }
-        const normalizedName = String(file.name || '').replace(/\\/g, '/').replace(/^[/\\]+/, '');
-        const localPath = path.join(installDir, normalizedName);
-        const lowerName = normalizedName.toLowerCase();
-
-        updateStatus(`Checking: ${normalizedName}`);
-        updateProgress(i + 1, files.length, 'total');
-
-        // Never patch/delete local user state or the client executable itself.
-        // These are intentionally outside server patch ownership.
-        const localStateFile =
-          ['options.cfg','user.cfg','swgemu.cfg','swgemu_machineoptions.iff',
-           'swgemu_login.cfg','login.cfg','swgemu_preload.cfg'].includes(lowerName);
-
-        // Preserve existing local/user state, but allow every one of these
-        // files to download on a fresh installation.
-        const protectedLocal =
-          (localStateFile && fs.existsSync(localPath)) ||
-          (lowerName.startsWith('profiles/') && fs.existsSync(localPath)) ||
-          ((lowerName === 'swgclient_r.exe' || lowerName === 'swgemu.exe') &&
-           fs.existsSync(localPath));
-
-        if (!fs.existsSync(localPath)) {
-          updateStatus(`Downloading ${versionLabel(gameVersion)} client file: ${normalizedName}`);
-        }
-
-        if (protectedLocal) {
-          verifiedCount++;
-          updateStatus(`Preserved local file: ${normalizedName}`);
-          continue;
-        }
-
-        if (fs.existsSync(localPath)) {
-          try {
-            const localMd5 = await ipcRenderer.invoke('check-md5', localPath);
-            if (localMd5 === file.md5) {
-              verifiedCount++;
-              updateProgress(100, 100, 'file');
-            } else {
-              downloadedCount++;
-              if (!(await downloadFile(file, localPath, isEnhancedGraphicsFile(file)))) errorCount++;
-            }
-          } catch (error) {
-            errorCount++;
-            updateStatus(`Check failed for ${normalizedName}: ${error.message}`);
-          }
-        } else {
-          downloadedCount++;
-          if (!(await downloadFile(file, localPath, isEnhancedGraphicsFile(file)))) errorCount++;
-        }
+      } catch (error) {
+        console.error('machine state check failed:', error);
       }
 
-      updateStatus(`Scan complete. Verified: ${verifiedCount}, Downloaded: ${downloadedCount}, Errors: ${errorCount}`);
+      updateStatus(
+        `Scan complete. Verified: ${outcome.verified}` +
+        (outcome.cacheHits ? ` (${outcome.cacheHits} unchanged)` : '') +
+        `, Downloaded: ${outcome.downloaded}, Errors: ${outcome.errors}` +
+        machineNote
+      );
+
+      if (outcome.errors) {
+        updateStatus(`Scan finished with ${outcome.errors} error(s): ${summarizeFailedFiles(outcome.failed)}. ${verificationHint(outcome.failed)}`);
+      }
     } catch (error) {
       updateStatus(`Scan error: ${error.message}`);
     } finally {
@@ -674,19 +929,15 @@ window.addEventListener('DOMContentLoaded', () => {
       downloadSpeedElement.textContent = '';
     }
   }
-
+  // Returns { ok, reason } so callers can report why a file could not be
+  // fetched instead of only counting it.
   async function downloadFile(file, destination, enhancedGraphics = false) {
     updateStatus(`Downloading: ${file.name}`);
 
     try {
-      const baseUrl = enhancedGraphics
-        ? 'https://swg-ghosts.online/tre/'
-        : (gameVersion === 'nge'
-          ? 'https://swg-ghosts.online/tre/nge/'
-          : 'https://swg-ghosts.online/tre/');
-      // Enhanced Graphics is hosted in the shared /tre/ tree. Normal client
-      // files remain version-specific (/tre/ or /tre/nge/).
-      const url = baseUrl + file.name.replace(/^[/\\]+/, '');
+      const baseUrl = versionFileUrl(gameVersion);
+      // Enhanced Graphics and client files both live in the shared /tre/ tree.
+      const url = baseUrl + encodeManifestName(file.name);
 
       await ipcRenderer.invoke('download-file', {
         url,
@@ -696,10 +947,11 @@ window.addEventListener('DOMContentLoaded', () => {
       });
 
       updateStatus(`Downloaded: ${file.name}`);
-      return true;
+      return { ok: true };
     } catch (error) {
-      updateStatus(`Download failed for ${file.name}: ${error.message}`);
-      return false;
+      const reason = describeIpcError(error);
+      updateStatus(`Download failed for ${file.name}: ${reason}`);
+      return { ok: false, reason };
     }
   }
 
