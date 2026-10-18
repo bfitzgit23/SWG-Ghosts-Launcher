@@ -1,6 +1,6 @@
 {
   "name": "ghosts-launcher",
-  "version": "1.9.7",
+  "version": "2.2.4",
   "description": "SWG Ghosts Launcher",
   "main": "main.js",
   "author": "Ghosts_Dev",
@@ -95,10 +95,14 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "http://212.28.185",
+      "url": "https://swg-ghosts.online/launcher",
       "channel": "latest"
     }
   },
   "appId": "com.Ghosts.launcher",
-  "productName": "Ghosts Launcher"
+  "productName": "Ghosts Launcher",
+  "allowScripts": {
+    "electron@27.3.11": true,
+    "electron-winstaller@5.4.0": true
+  }
 }
