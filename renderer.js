@@ -276,11 +276,21 @@ window.addEventListener('DOMContentLoaded', () => {
   // Launcher auto-update notifications
   // ------------------------------
   ipcRenderer.on('launcher-update-available', (_event, info) => {
-    updateStatus(`Launcher update ${info.version} downloading...`);
+    updateStatus(`Launcher update ${info.version} downloading from ${info.feed || 'the update feed'}...`);
+  });
+
+  ipcRenderer.on('launcher-update-progress', (_event, info) => {
+    const percent = Math.round(info.percent || 0);
+    updateStatus(`Downloading launcher update... ${percent}%`);
   });
 
   ipcRenderer.on('launcher-update-downloaded', (_event, info) => {
     updateStatus(`Launcher update ${info.version} ready — it will install when the launcher closes.`);
+  });
+
+  ipcRenderer.on('launcher-update-error', (_event, info) => {
+    // Every feed failed (or none answered). Say so instead of sitting silently.
+    updateStatus(`Launcher update check failed (${info.feed || 'update feed'}): ${info.message || 'unknown error'}`);
   });
 
   // ------------------------------
@@ -859,10 +869,24 @@ window.addEventListener('DOMContentLoaded', () => {
         label: mode === 'full' ? 'Full scan' : 'Quick scan'
       });
 
+      // A fresh install has no options.cfg (the channel does not ship one, so each
+      // machine keeps its own mode). Ask the main process to seed it from this
+      // machine's desktop mode; an existing file is never touched.
+      let machineNote = '';
+      try {
+        const state = await ipcRenderer.invoke('ensure-machine-state', { dir: installDir });
+        if (state && state.created) {
+          machineNote = ` Wrote options.cfg for this machine: ${state.display.width}x${state.display.height}.`;
+        }
+      } catch (error) {
+        console.error('machine state check failed:', error);
+      }
+
       updateStatus(
         `Scan complete. Verified: ${outcome.verified}` +
         (outcome.cacheHits ? ` (${outcome.cacheHits} unchanged)` : '') +
-        `, Downloaded: ${outcome.downloaded}, Errors: ${outcome.errors}`
+        `, Downloaded: ${outcome.downloaded}, Errors: ${outcome.errors}` +
+        machineNote
       );
 
       if (outcome.errors) {
