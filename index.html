@@ -95,6 +95,32 @@
     }
     .close-button:hover { background: rgba(255,0,0,.90); }
 
+    /* Game-version selector: translucent black panel for readable text over the artwork */
+    .game-version-panel {
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.20);
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    .game-version-panel > label:first-child {
+      color: #FFFFFF;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+      letter-spacing: 0.5px;
+    }
+
+    .game-version-panel .version-option {
+      background: rgba(0, 0, 0, 0.12);
+      border-radius: 5px;
+      padding: 3px 5px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+    }
+
+    .game-version-panel .version-option:hover {
+      background: rgba(0, 0, 0, 0.32);
+    }
+
     /* PLAY button */
     .play-button {
       width: 120px;
@@ -622,7 +648,7 @@
       <button class="side-button" id="quick-scan">QUICK SCAN</button>
       <button class="side-button" id="full-scan">FULL SCAN (RECHECK ALL)</button>
       <button class="side-button" id="client-setup" title="Open the client's own graphics/sound options utility">CLIENT SETUP</button>
-      <div class="setting-group" style="margin-bottom:12px;">
+      <div class="setting-group game-version-panel" style="margin-bottom:12px;">
         <label style="display:block; margin-bottom:6px;">GAME VERSION</label>
         <div id="game-version-group" style="display:flex; flex-direction:column; gap:6px;">
           <label class="version-option" style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#FFFFFF; font-size:15px; font-weight:700;">
