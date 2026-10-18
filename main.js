@@ -1277,6 +1277,14 @@ function configureAutoUpdater() {
             message: state.error,
             feed: state.feedLabel
           });
+        } else if (state.phase === 'ready' && state.error !== previous.error && state.error) {
+          // Install-stage failure (e.g. the installer failed to spawn after a
+          // verified download). Without this the 'ready' message stays up and
+          // the failure is only in the log file.
+          sendToLauncherWindow('launcher-update-error', {
+            message: state.error,
+            feed: state.feedLabel
+          });
         }
       }
 

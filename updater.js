@@ -206,8 +206,19 @@ function createUpdaterController(options) {
     autoUpdater.on('update-downloaded', (info) => {
       if (currentAttempt) currentAttempt.downloaded = info || {};
     });
+    // This listener must always be attached (not only mid-attempt): install and
+    // install-on-quit failures are dispatched as 'error' after the check has
+    // finished, when currentAttempt is already null. Without this they vanish
+    // except for electron-updater's own console line — the user is never told
+    // why the update didn't install.
     autoUpdater.on('error', (error) => {
-      if (currentAttempt && !currentAttempt.error) currentAttempt.error = describeError(error);
+      const message = describeError(error);
+      if (currentAttempt && !currentAttempt.error) currentAttempt.error = message;
+      log(`[updater] error: ${message}`);
+      // Surface failures that happen once an update is staged (e.g. the
+      // installer failing to spawn). The UI maps a changed error in 'ready'
+      // phase to a visible message.
+      if (state.phase === 'ready') setState({ error: message });
     });
   }
 

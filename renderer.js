@@ -23,6 +23,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const currentVersionElement = document.getElementById('current-version');
   const settingsButton = document.getElementById('settings-button');
   const pauseButton = document.getElementById('pause-button');
+  const installUpdateButton = document.getElementById('install-update');
   const clearCacheButton = document.getElementById('clear-cache');
   const viewLogsButton = document.getElementById('view-logs');
   const donateButton = document.getElementById('donate-button');
@@ -286,8 +287,38 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatus(`Downloading launcher update... ${percent}%`);
   });
 
+  // The install button is the explicit install path: the update used to rely
+  // solely on install-on-close, which left users stuck when that silently
+  // failed. It only shows while a verified update is ready to install.
+  function refreshInstallButton(phase, version) {
+    if (!installUpdateButton) return;
+    if (phase === 'ready') {
+      installUpdateButton.textContent = version ? `RESTART & INSTALL ${version}` : 'RESTART & INSTALL';
+      installUpdateButton.style.display = '';
+    } else {
+      installUpdateButton.style.display = 'none';
+    }
+  }
+
+  if (installUpdateButton) installUpdateButton.addEventListener('click', async () => {
+    updateStatus('Installing launcher update — the launcher will close and restart...');
+    try {
+      const result = await ipcRenderer.invoke('install-launcher-update');
+      if (!result || !result.success) {
+        updateStatus(`Update install didn't start: ${(result && result.message) || 'no verified update ready'}`);
+      }
+    } catch (error) {
+      updateStatus(`Update install didn't start: ${error.message}`);
+    }
+  });
+
   ipcRenderer.on('launcher-update-downloaded', (_event, info) => {
-    updateStatus(`Launcher update ${info.version} ready — it will install when the launcher closes.`);
+    refreshInstallButton('ready', info.version);
+    updateStatus(`Launcher update ${info.version} ready — press RESTART & INSTALL, or it will install when the launcher closes.`);
+  });
+
+  ipcRenderer.on('launcher-update-status', (_event, info) => {
+    if (info && info.phase !== 'ready') refreshInstallButton(info.phase);
   });
 
   ipcRenderer.on('launcher-update-error', (_event, info) => {
