@@ -146,8 +146,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
   async function loadSettings() {
     try {
-      const scanMode = await ipcRenderer.invoke('get-scan-mode');
-      scanModeSelect.value = scanMode || 'quick';
+      if (scanModeSelect) {
+        const scanMode = await ipcRenderer.invoke('get-scan-mode');
+        scanModeSelect.value = scanMode || 'quick';
+      }
 
       const savedVersion = await ipcRenderer.invoke('get-game-version');
       if (savedVersion) {
@@ -178,7 +180,7 @@ window.addEventListener('DOMContentLoaded', () => {
       enhancedMap[gameVersion] = enhancedGraphicsEnabled;
 
       const settings = {
-        scanMode: scanModeSelect.value,
+        scanMode: scanModeSelect ? scanModeSelect.value : 'quick',
         autoLaunch: autoLaunchCheckbox.checked,
         autoUpdate: autoUpdateCheckbox.checked,
         minimizeToTray: minimizeToTrayCheckbox.checked,
@@ -399,7 +401,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // ------------------------------
   // Scanning
   // ------------------------------
-  quickScanButton.addEventListener('click', () => {
+  // Scan buttons were removed from the UI (2.2.5): Play launches directly
+  // with no verification scan, so these guards only run if the elements exist.
+  if (quickScanButton) quickScanButton.addEventListener('click', () => {
     if (!installDir) {
       updateStatus('Please set an install location first');
       showInstallLocationDialog();
@@ -408,7 +412,7 @@ window.addEventListener('DOMContentLoaded', () => {
     startScan('quick');
   });
 
-  fullScanButton.addEventListener('click', () => {
+  if (fullScanButton) fullScanButton.addEventListener('click', () => {
     if (!installDir) {
       updateStatus('Please set an install location first');
       showInstallLocationDialog();
@@ -448,7 +452,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  pauseButton.addEventListener('click', () => {
+  if (pauseButton) pauseButton.addEventListener('click', () => {
     isPaused = !isPaused;
     pauseButton.textContent = isPaused ? 'RESUME SCAN' : 'PAUSE SCAN';
     updateStatus(isPaused ? 'Scan paused' : 'Scan resumed');
@@ -842,7 +846,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     isScanning = true;
     isPaused = false;
-    pauseButton.textContent = 'PAUSE SCAN';
+    if (pauseButton) pauseButton.textContent = 'PAUSE SCAN';
     downloadSpeedElement.textContent = '';
     lastDownloadUpdate = Date.now();
     lastDownloadBytes = 0;

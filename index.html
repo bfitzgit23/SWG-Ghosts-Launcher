@@ -121,6 +121,16 @@
       background: rgba(0, 0, 0, 0.32);
     }
 
+    /* Version + install-location readouts share the same translucent black panel */
+    #current-version,
+    #current-directory {
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.20);
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
     /* PLAY button */
     .play-button {
       width: 120px;
@@ -591,14 +601,6 @@
     </div>
 
     <div class="setting-item">
-      <label class="setting-label">Scan Mode</label>
-      <select class="setting-select" id="scan-mode-select">
-        <option value="quick">Quick Scan</option>
-        <option value="full">Full Scan</option>
-      </select>
-    </div>
-
-    <div class="setting-item">
       <label>
         <input type="checkbox" class="setting-checkbox" id="auto-launch-checkbox">
         Auto-launch after scan
@@ -645,8 +647,6 @@
     <div class="play-button" id="play-button">PLAY</div>
 
     <div class="side-buttons">
-      <button class="side-button" id="quick-scan">QUICK SCAN</button>
-      <button class="side-button" id="full-scan">FULL SCAN (RECHECK ALL)</button>
       <button class="side-button" id="client-setup" title="Open the client's own graphics/sound options utility">CLIENT SETUP</button>
       <div class="setting-group game-version-panel" style="margin-bottom:12px;">
         <label style="display:block; margin-bottom:6px;">GAME VERSION</label>
@@ -672,7 +672,6 @@
       <div id="current-directory"></div>
 
       <div class="button-group">
-        <button class="mini-button" id="pause-button">PAUSE SCAN</button>
         <button class="mini-button" id="clear-cache">CLEAR CACHE</button>
         <button class="mini-button" id="view-logs">VIEW LOGS</button>
 
