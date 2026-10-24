@@ -422,7 +422,7 @@ ipcMain.handle('clear-verify-cache', () => {
 // ------------------------------
 // Download file with progress
 // ------------------------------
-ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, size }) => {
+ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, size, segments }) => {
   // The request/verify/replace path is in download.js so it can be exercised
   // headlessly against the live file host (scripts/download-selftest.js).
   return downloadFileFromUrl({
@@ -430,6 +430,7 @@ ipcMain.handle('download-file', async (event, { url, destination, expectedMd5, s
     destination,
     expectedMd5,
     size,
+    segments,
     onProgress: (progress) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('file-progress', progress);

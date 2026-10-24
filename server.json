@@ -9,13 +9,5 @@
     "manifestUrl": "https://swg-ghosts.online/tre/nge/required-files.json",
     "baseUrl": "https://swg-ghosts.online/tre/nge/"
   },
-  "launcherVersion": "1.9.1",
-  "enhancedGraphics": {
-    "enabledPerInstallation": true,
-    "sourceBaseUrl": "https://swg-ghosts.online/tre/",
-    "paths": [
-      "ui/",
-      "*.dat"
-    ]
-  }
+  "launcherVersion": "1.9.1"
 }

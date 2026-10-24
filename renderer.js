@@ -43,7 +43,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const autoLaunchCheckbox = document.getElementById('auto-launch-checkbox');
   const autoUpdateCheckbox = document.getElementById('auto-update-checkbox');
   const minimizeToTrayCheckbox = document.getElementById('minimize-to-tray-checkbox');
-  const enhancedGraphicsCheckbox = document.getElementById('enhanced-graphics-checkbox');
   const timeoutInput = document.getElementById('timeout-input');
   const saveSettingsButton = document.getElementById('save-settings');
 
@@ -52,7 +51,6 @@ window.addEventListener('DOMContentLoaded', () => {
   let isPaused = false;
   let installDir = null;
   let gameVersion = 'precu';
-  let enhancedGraphicsEnabled = false;
   let lastDownloadUpdate = Date.now();
   let lastDownloadBytes = 0;
 
@@ -81,7 +79,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const timeDiff = (now - lastDownloadUpdate) / 1000;
 
     if (timeDiff >= 1) {
-      const bytesDiff = bytesSoFar - lastDownloadBytes;
+      // A retried segment rolls its byte count back, so never show negative speed.
+      const bytesDiff = Math.max(0, bytesSoFar - lastDownloadBytes);
       const speed = bytesDiff / timeDiff;
 
       let speedText;
@@ -163,9 +162,6 @@ window.addEventListener('DOMContentLoaded', () => {
         autoLaunchCheckbox.checked = settings.autoLaunch || false;
         autoUpdateCheckbox.checked = settings.autoUpdate || false;
         minimizeToTrayCheckbox.checked = settings.minimizeToTray || false;
-        const enhancedMap = settings.enhancedGraphics || {};
-        enhancedGraphicsEnabled = !!enhancedMap[gameVersion];
-        enhancedGraphicsCheckbox.checked = enhancedGraphicsEnabled;
         timeoutInput.value = settings.timeout || 30;
       }
     } catch (error) {
@@ -175,29 +171,16 @@ window.addEventListener('DOMContentLoaded', () => {
 
   async function saveSettings() {
     try {
-      enhancedGraphicsEnabled = enhancedGraphicsCheckbox.checked;
-      const existing = await ipcRenderer.invoke('get-settings') || {};
-      const enhancedMap = { ...(existing.enhancedGraphics || {}) };
-      enhancedMap[gameVersion] = enhancedGraphicsEnabled;
-
       const settings = {
         scanMode: scanModeSelect ? scanModeSelect.value : 'quick',
         autoLaunch: autoLaunchCheckbox.checked,
         autoUpdate: autoUpdateCheckbox.checked,
         minimizeToTray: minimizeToTrayCheckbox.checked,
-        enhancedGraphics: enhancedMap,
         timeout: parseInt(timeoutInput.value, 10) || 30
       };
 
       await ipcRenderer.invoke('save-settings', settings);
       closeSettingsModal();
-
-      if (enhancedGraphicsEnabled) {
-        updateStatus(`${versionLabel(gameVersion)} Enhanced Graphics enabled — syncing UI files...`);
-        await syncEnhancedGraphics();
-      } else {
-        updateStatus(`${versionLabel(gameVersion)} Enhanced Graphics disabled. Existing files were left untouched.`);
-      }
     } catch (error) {
       updateStatus(`Failed to save settings: ${error.message}`);
     }
@@ -223,16 +206,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   async function loadVersionInstallDir() {
     gameVersion = selectedGameVersion();
-
-    try {
-      const settings = await ipcRenderer.invoke('get-settings') || {};
-      const enhancedMap = settings.enhancedGraphics || {};
-      enhancedGraphicsEnabled = !!enhancedMap[gameVersion];
-      enhancedGraphicsCheckbox.checked = enhancedGraphicsEnabled;
-    } catch (_) {
-      enhancedGraphicsEnabled = false;
-      enhancedGraphicsCheckbox.checked = false;
-    }
 
     // Never carry another profile's install path into this profile.
     installDir = null;
@@ -512,17 +485,14 @@ window.addEventListener('DOMContentLoaded', () => {
     updateStatus('Opening PayPal donation page...');
   });
 
-  function isEnhancedGraphicsFile(file) {
+  function isSharedUiFile(file) {
     const name = String(file?.name || '').replace(/\\/g, '/').replace(/^[/\\]+/, '').toLowerCase();
-    // The enhanced package is intentionally limited to the existing TRE UI
+    // The shared UI package is intentionally limited to the existing TRE UI
     // overlay plus UI-scaling .dat files. ReShade and unrelated client files
-    // remain under the normal manifest and are never toggled here.
+    // remain under the normal manifest.
     return name.startsWith('ui/') || name.endsWith('.dat');
   }
 
-  function shouldPatchFile(file) {
-    return enhancedGraphicsEnabled || !isEnhancedGraphicsFile(file);
-  }
 
   // Manifest names come from the file host, so they are not guaranteed to be
   // URL-safe. Requesting one segment at a time and escaping each keeps names
@@ -592,21 +562,20 @@ window.addEventListener('DOMContentLoaded', () => {
     const selectedFiles = await ipcRenderer.invoke('load-required-files', gameVersion);
     if (!Array.isArray(selectedFiles)) return [];
 
-    const normalFiles = selectedFiles.filter(file => !isEnhancedGraphicsFile(file));
-    if (!enhancedGraphicsEnabled) return normalFiles;
+    const normalFiles = selectedFiles.filter(file => !isSharedUiFile(file));
 
-    // Enhanced UI/scaling files are hosted in the shared /tre/ tree. For NGE,
+    // Shared UI/scaling files are hosted in the shared /tre/ tree. For NGE,
     // pull those entries from the shared PRE-CU manifest and apply them to the
     // currently selected NGE installation.
     const sharedFiles = gameVersion === 'precu' || gameVersion === 'precu-testcenter'
       ? selectedFiles
       : await ipcRenderer.invoke('load-required-files', 'precu');
-    const enhancedFiles = Array.isArray(sharedFiles)
-      ? sharedFiles.filter(isEnhancedGraphicsFile)
+    const sharedUiFiles = Array.isArray(sharedFiles)
+      ? sharedFiles.filter(isSharedUiFile)
       : [];
 
     const seen = new Set(normalFiles.map(file => String(file.name || '').toLowerCase()));
-    for (const file of enhancedFiles) {
+    for (const file of sharedUiFiles) {
       const key = String(file.name || '').toLowerCase();
       if (!seen.has(key)) {
         normalFiles.push(file);
@@ -617,53 +586,6 @@ window.addEventListener('DOMContentLoaded', () => {
     return normalFiles;
   }
 
-  async function syncEnhancedGraphics() {
-    if (!installDir) {
-      updateStatus(`Set the ${versionLabel(gameVersion)} install location first.`);
-      return { success: false, errors: 1 };
-    }
-
-    try {
-      // Enhanced files live in the shared /tre/ tree.
-      const files = await ipcRenderer.invoke('load-required-files', 'precu');
-      const enhancedFiles = Array.isArray(files) ? files.filter(isEnhancedGraphicsFile) : [];
-      if (!enhancedFiles.length) {
-        updateStatus('No Enhanced Graphics files were found in the shared TRE manifest.');
-        return { success: false, errors: 1 };
-      }
-
-      let errors = 0;
-      for (let i = 0; i < enhancedFiles.length; i++) {
-        const file = enhancedFiles[i];
-        const normalizedName = String(file.name || '').replace(/\\/g, '/').replace(/^[/\\]+/, '');
-        const localPath = path.join(installDir, normalizedName);
-        updateProgress(i + 1, enhancedFiles.length, 'total');
-        updateStatus(`Enhanced Graphics: ${normalizedName}`);
-
-        let valid = false;
-        if (fs.existsSync(localPath)) {
-          try {
-            const localMd5 = await ipcRenderer.invoke('check-md5', localPath);
-            valid = String(localMd5).toLowerCase() === String(file.md5).toLowerCase();
-          } catch (_) {}
-        }
-
-        if (!valid) {
-          const result = await downloadFile(file, localPath, true);
-          if (!result.ok) errors++;
-        }
-      }
-
-      updateStatus(errors === 0
-        ? `${versionLabel(gameVersion)} Enhanced Graphics installed and verified.`
-        : `Enhanced Graphics finished with ${errors} download error(s).`);
-      return { success: errors === 0, errors };
-    } catch (error) {
-      updateStatus(`Enhanced Graphics error: ${error.message}`);
-      return { success: false, errors: 1 };
-    }
-  }
-
   // ------------------------------
   // Patch reconciliation
   // ------------------------------
@@ -671,8 +593,15 @@ window.addEventListener('DOMContentLoaded', () => {
   // strictly sequentially. Neither scale to a multi-gigabyte client, so both are
   // now done through bounded worker pools, and the hashing itself happens in the
   // main process (see `verify-files`) where it can run several files at once.
-  const DOWNLOAD_CONCURRENCY = 4;
   const VERIFY_CONCURRENCY = 8;
+
+  // Both clients are mostly multi-hundred-megabyte TREs and the file host
+  // throttles each connection (measured ~1 MB/s per socket, scaling almost
+  // linearly), so large files are split across several byte ranges at once (see
+  // download.js). Two files in flight times eight connections keeps the total
+  // number of sockets the launcher opens against the host bounded at sixteen.
+  const DOWNLOAD_CONCURRENCY = 2;
+  const DOWNLOAD_SEGMENTS = 8;
 
   function normalizeManifestName(name) {
     return String(name || '').replace(/\\/g, '/').replace(/^[/\\]+/, '');
@@ -734,8 +663,6 @@ window.addEventListener('DOMContentLoaded', () => {
     let preserved = 0;
 
     for (const file of files) {
-      if (!shouldPatchFile(file)) continue;
-
       const normalizedName = normalizeManifestName(file.name);
       const localPath = path.join(installDir, normalizedName);
       const lowerName = normalizedName.toLowerCase();
@@ -788,14 +715,17 @@ window.addEventListener('DOMContentLoaded', () => {
     let errors = 0;
     const failed = [];
     if (toDownload.length) {
-      updateStatus(`${label}: downloading ${toDownload.length} file(s) (${DOWNLOAD_CONCURRENCY} in parallel)`);
+      updateStatus(
+        `${label}: downloading ${toDownload.length} file(s) ` +
+        `(${DOWNLOAD_CONCURRENCY} at a time, up to ${DOWNLOAD_SEGMENTS} connections each)`
+      );
 
       let done = 0;
       await runPool(toDownload, async (target) => {
         if (isPaused) {
           while (isPaused) await new Promise(r => setTimeout(r, 120));
         }
-        const result = await downloadFile(target.file, target.localPath, isEnhancedGraphicsFile(target.file));
+        const result = await downloadFile(target.file, target.localPath, { segments: DOWNLOAD_SEGMENTS });
         if (!result.ok) {
           errors++;
           failed.push({
@@ -936,19 +866,23 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   // Returns { ok, reason } so callers can report why a file could not be
   // fetched instead of only counting it.
-  async function downloadFile(file, destination, enhancedGraphics = false) {
+  async function downloadFile(file, destination, options) {
     updateStatus(`Downloading: ${file.name}`);
 
     try {
       const baseUrl = versionFileUrl(gameVersion);
-      // Enhanced Graphics and client files both live in the shared /tre/ tree.
+      // All client files (including the UI overlay) live in the shared /tre/ tree.
       const url = baseUrl + encodeManifestName(file.name);
 
       await ipcRenderer.invoke('download-file', {
         url,
         destination,
         expectedMd5: file.md5,
-        size: file.size
+        size: file.size,
+        // Main splits files above 8 MB across this many range requests when
+        // the host supports them; smaller files and hosts without range support
+        // use the plain single-stream path.
+        segments: (options && options.segments) || 1
       });
 
       updateStatus(`Downloaded: ${file.name}`);
