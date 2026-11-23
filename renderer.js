@@ -192,7 +192,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Install Directory / Game Version
   // ------------------------------
   function versionLabel(version) {
-    return version === 'nge' ? 'NGE' : (version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU');
+    return version === 'nge' ? 'HYBRID' : (version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU');
   }
 
   function versionValidExe(version, lowerName) {
@@ -338,7 +338,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!valid) {
           updateStatus(
             gameVersion === 'nge'
-              ? 'Please select swgclient_r.exe for the NGE client.'
+              ? 'Please select swgclient_r.exe for the HYBRID client.'
               : 'Please select SWGEmu.exe for the PRE-CU client.'
           );
           return;
