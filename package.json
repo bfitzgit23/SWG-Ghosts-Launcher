@@ -1,6 +1,6 @@
 {
   "name": "ghosts-launcher",
-  "version": "2.2.18",
+  "version": "2.2.19",
   "description": "SWG Ghosts Launcher",
   "main": "main.js",
   "author": "Ghosts_Dev",
@@ -27,7 +27,9 @@
     "deploy:win": "electron-builder --win --x64 -p always",
     "build:linux": "electron-builder --linux --x64",
     "deploy:linux": "electron-builder --linux --x64 -p always",
-    "build:mac": "electron-builder --mac --x64",
+    "build:mac": "node scripts/build-mac.js",
+    "build:mac:x64": "node scripts/build-mac.js --x64",
+    "build:mac:arm64": "node scripts/build-mac.js --arm64",
     "publish:win": "node scripts/publish-win.js",
     "publish:github": "node scripts/publish-github.js",
     "test:updater": "node scripts/updater-selftest.js"
@@ -88,6 +90,23 @@
       ],
       "category": "Game",
       "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.games",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": true
     },
     "nsis": {
       "oneClick": false,
