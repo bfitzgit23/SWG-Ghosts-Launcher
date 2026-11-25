@@ -192,11 +192,13 @@ window.addEventListener('DOMContentLoaded', () => {
   // Install Directory / Game Version
   // ------------------------------
   function versionLabel(version) {
-    return version === 'nge' ? 'HYBRID' : (version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU');
+    return version === 'nge' ? 'CU' : (version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU');
   }
 
   function versionValidExe(version, lowerName) {
-    return version === 'nge' ? lowerName === 'swgclient_r.exe' : lowerName === 'swgemu.exe';
+    return version === 'nge'
+      ? (lowerName === 'swgclient_r.exe' || lowerName === 'galaxies reborn precu.exe')
+      : lowerName === 'swgemu.exe';
   }
 
   function versionExeSettingKey(version) {
@@ -338,7 +340,7 @@ window.addEventListener('DOMContentLoaded', () => {
         if (!valid) {
           updateStatus(
             gameVersion === 'nge'
-              ? 'Please select swgclient_r.exe for the HYBRID client.'
+              ? 'Please select SwgClient_r.exe for the CU client.'
               : 'Please select SWGEmu.exe for the PRE-CU client.'
           );
           return;
@@ -548,13 +550,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function versionManifestUrl(version) {
     return version === 'nge'
-      ? 'https://swg-ghosts.online/tre/nge/required-files.json'
+      ? 'https://swg-ghosts.online/tre/cu/required-files.json'
       : 'https://swg-ghosts.online/tre/required-files.json';
   }
 
   function versionFileUrl(version) {
     return version === 'nge'
-      ? 'https://swg-ghosts.online/tre/nge/'
+      ? 'https://swg-ghosts.online/tre/cu/'
       : 'https://swg-ghosts.online/tre/';
   }
 
@@ -564,9 +566,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const normalFiles = selectedFiles.filter(file => !isSharedUiFile(file));
 
-    // Shared UI/scaling files are hosted in the shared /tre/ tree. For NGE,
+    // Shared UI/scaling files are hosted in the shared /tre/ tree. For CU,
     // pull those entries from the shared PRE-CU manifest and apply them to the
-    // currently selected NGE installation.
+    // currently selected CU installation.
     const sharedFiles = gameVersion === 'precu' || gameVersion === 'precu-testcenter'
       ? selectedFiles
       : await ipcRenderer.invoke('load-required-files', 'precu');

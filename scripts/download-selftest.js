@@ -28,11 +28,11 @@ const { downloadFileFromUrl } = require('../download');
 
 const UA = { 'User-Agent': 'GhostsLauncher' };
 const HOST = 'https://swg-ghosts.online';
-const BASES = { precu: HOST + '/tre/', 'precu-testcenter': HOST + '/tre/', nge: HOST + '/tre/nge/' };
+const BASES = { precu: HOST + '/tre/', 'precu-testcenter': HOST + '/tre/', nge: HOST + '/tre/cu/' };
 const MANIFESTS = {
   precu: HOST + '/tre/required-files.json',
   'precu-testcenter': HOST + '/tre/required-files.json',
-  nge: HOST + '/tre/nge/required-files.json'
+  nge: HOST + '/tre/cu/required-files.json'
 };
 
 // Files whose bytes the CDN has been caught rewriting, plus one of each shape

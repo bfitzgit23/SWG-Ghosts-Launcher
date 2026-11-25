@@ -20,7 +20,7 @@ let mainWindow;
 
 // Keep ONE source of truth for your patch base
 const PRECU_BASE_URL = 'https://swg-ghosts.online/tre/';
-const NGE_BASE_URL = 'https://swg-ghosts.online/tre/nge/';
+const CU_BASE_URL = 'https://swg-ghosts.online/tre/cu/';
 const PRECU_TESTCENTER_LOGIN_IP = '212.28.185.14';
 const SWGEmu_EXE_FILENAME = 'SWGEmu.exe';
 const SWGEmu_EXE_ALT_FILENAMES = ['SWGEmu.exe', 'SWGEmu.exe.patched', 'swgemu.exe'];
@@ -176,7 +176,7 @@ function fetchJsonManifest(url) {
 // ------------------------------
 ipcMain.handle('load-required-files', async (event, version = 'precu') => {
   return new Promise((resolve, reject) => {
-    const baseUrl = version === 'nge' ? NGE_BASE_URL : PRECU_BASE_URL;
+    const baseUrl = version === 'nge' ? CU_BASE_URL : PRECU_BASE_URL;
     const url = baseUrl + 'required-files.json';
     console.log(`Loading ${version.toUpperCase()} files from: ${url}`);
 
@@ -564,8 +564,10 @@ ipcMain.handle('check-installation', async (event, { version = 'precu', dir } = 
       return { ok: false, error: `Installation directory does not exist: ${rootDir}` };
     }
 
+    // The CU channel ships SwgClient_r.exe (the Galaxies-Reborn Pre-CU build).
+    // Older CU installs may only carry the same binary under its release name.
     const names = version === 'nge'
-      ? ['swgclient_r.exe', 'SwgClient_r.exe', 'SWGClient_r.exe']
+      ? ['swgclient_r.exe', 'SwgClient_r.exe', 'SWGClient_r.exe', 'Galaxies Reborn PRECU.exe']
       : ['SWGEmu.exe', 'swgemu.exe', 'SWGEMU.exe'];
 
     const wanted = new Set(names.map(n => n.toLowerCase()));
@@ -622,7 +624,7 @@ ipcMain.handle('check-installation', async (event, { version = 'precu', dir } = 
       }
     }
 
-    const expected = version === 'nge' ? 'swgclient_r.exe' : 'SWGEmu.exe';
+    const expected = version === 'nge' ? 'SwgClient_r.exe' : 'SWGEmu.exe';
     return {
       ok: !!exePath,
       version,

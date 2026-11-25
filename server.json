@@ -5,9 +5,9 @@
     "manifestUrl": "https://swg-ghosts.online/tre/required-files.json",
     "baseUrl": "https://swg-ghosts.online/tre/"
   },
-  "nge": {
-    "manifestUrl": "https://swg-ghosts.online/tre/nge/required-files.json",
-    "baseUrl": "https://swg-ghosts.online/tre/nge/"
+  "cu": {
+    "manifestUrl": "https://swg-ghosts.online/tre/cu/required-files.json",
+    "baseUrl": "https://swg-ghosts.online/tre/cu/"
   },
   "launcherVersion": "2.2.18"
 }
