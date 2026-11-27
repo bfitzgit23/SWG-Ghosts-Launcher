@@ -37,6 +37,7 @@ let mainWindow;
 // Keep ONE source of truth for your patch base
 const PRECU_BASE_URL = 'https://swg-ghosts.online/tre/';
 const CU_BASE_URL = 'https://swg-ghosts.online/tre/cu/';
+const EIF_BASE_URL = 'https://swg-ghosts.online/tre/eif/';
 const PRECU_TESTCENTER_LOGIN_IP = '212.28.185.14';
 const SWGEmu_EXE_FILENAME = 'SWGEmu.exe';
 const SWGEmu_EXE_ALT_FILENAMES = ['SWGEmu.exe', 'SWGEmu.exe.patched', 'swgemu.exe'];
@@ -192,7 +193,8 @@ function fetchJsonManifest(url) {
 // ------------------------------
 ipcMain.handle('load-required-files', async (event, version = 'precu') => {
   return new Promise((resolve, reject) => {
-    const baseUrl = version === 'nge' ? CU_BASE_URL : PRECU_BASE_URL;
+    const baseUrl = version === 'nge' ? CU_BASE_URL
+      : (version === 'eif' ? EIF_BASE_URL : PRECU_BASE_URL);
     const url = baseUrl + 'required-files.json';
     console.log(`Loading ${version.toUpperCase()} files from: ${url}`);
 
@@ -580,11 +582,9 @@ ipcMain.handle('check-installation', async (event, { version = 'precu', dir } = 
       return { ok: false, error: `Installation directory does not exist: ${rootDir}` };
     }
 
-    // The CU channel ships SwgClient_r.exe (the Galaxies-Reborn Pre-CU build).
-    // Older CU installs may only carry the same binary under its release name.
-    const names = version === 'nge'
-      ? ['swgclient_r.exe', 'SwgClient_r.exe', 'SWGClient_r.exe', 'Galaxies Reborn PRECU.exe']
-      : ['SWGEmu.exe', 'swgemu.exe', 'SWGEMU.exe'];
+    // Every channel now runs the Pre-CU SWGEmu.exe client, the GiF channel
+    // (formerly CU) included, so it is looked up exactly like PRE-CU.
+    const names = ['SWGEmu.exe', 'swgemu.exe', 'SWGEMU.exe'];
 
     const wanted = new Set(names.map(n => n.toLowerCase()));
     const skipDirs = new Set([
@@ -640,7 +640,7 @@ ipcMain.handle('check-installation', async (event, { version = 'precu', dir } = 
       }
     }
 
-    const expected = version === 'nge' ? 'SwgClient_r.exe' : 'SWGEmu.exe';
+    const expected = 'SWGEmu.exe';
     return {
       ok: !!exePath,
       version,
@@ -1041,8 +1041,13 @@ const CLIENT_SETUP_NAMES = [
   'SwgClientSetup_r.exe', 'SWGClientSetup_r.exe', 'swgclientsetup_r.exe',
   'SwgClientSetup.exe', 'SWGClientSetup.exe'
 ];
+// The GiF channel's Pre-CU install keeps the client's setup dialog next to
+// SWGEmu.exe as swgemu_setup.exe, so that build is looked up first for it.
+const GIF_SETUP_NAMES = [
+  'swgemu_setup.exe', 'SWGEmu_Setup.exe', 'SWGEmuSetup.exe'
+];
 
-ipcMain.handle('launch-client-setup', async (event, { dir } = {}) => {
+ipcMain.handle('launch-client-setup', async (event, { dir, version = 'precu' } = {}) => {
   try {
     if (!dir || typeof dir !== 'string') {
       return { success: false, error: 'No installation directory selected.' };
@@ -1053,10 +1058,13 @@ ipcMain.handle('launch-client-setup', async (event, { dir } = {}) => {
       return { success: false, error: `Installation directory does not exist: ${rootDir}` };
     }
 
-    const wanted = new Set(CLIENT_SETUP_NAMES.map(n => n.toLowerCase()));
+    const setupNames = (version === 'nge' || version === 'eif')
+      ? [...GIF_SETUP_NAMES, ...CLIENT_SETUP_NAMES]
+      : [...CLIENT_SETUP_NAMES, ...GIF_SETUP_NAMES];
+    const wanted = new Set(setupNames.map(n => n.toLowerCase()));
     const skipDirs = new Set(['node_modules', '.git', 'logs', 'cache', 'caches', 'gpuCache', 'crashpad', 'crashes']);
 
-    let setupPath = CLIENT_SETUP_NAMES
+    let setupPath = setupNames
       .map(n => path.join(rootDir, n))
       .find(p => {
         try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (_) { return false; }
@@ -1081,7 +1089,7 @@ ipcMain.handle('launch-client-setup', async (event, { dir } = {}) => {
     if (!setupPath) {
       return {
         success: false,
-        error: 'SwgClientSetup_r.exe was not found in this installation. Run a full scan first if the client is incomplete.'
+        error: 'The client setup utility (swgemu_setup.exe or SwgClientSetup_r.exe) was not found in this installation. Run a full scan first if the client is incomplete.'
       };
     }
 
@@ -1133,6 +1141,8 @@ ipcMain.handle('save-install-dir', (event, { version = 'precu', dir }) => {
 
   if (version === 'nge') {
     settings.ngeInstallDir = dir;
+  } else if (version === 'eif') {
+    settings.eifInstallDir = dir;
   } else if (version === 'precu-testcenter') {
     settings.precuTestCenterInstallDir = dir;
   } else {
@@ -1150,6 +1160,7 @@ ipcMain.handle('get-install-dir', (event, version = 'precu') => {
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
   if (version === 'nge') return settings.ngeInstallDir || null;
+  if (version === 'eif') return settings.eifInstallDir || null;
   if (version === 'precu-testcenter') return settings.precuTestCenterInstallDir || null;
   return settings.precuInstallDir || null;
   } catch (_) {

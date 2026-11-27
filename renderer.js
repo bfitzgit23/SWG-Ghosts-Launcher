@@ -153,7 +153,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
       const savedVersion = await ipcRenderer.invoke('get-game-version');
       if (savedVersion) {
-        const radio = gameVersionRadios.find(r => r.value === savedVersion);
+        // A profile saved on the old GiF channel (nge) comes back on the GiF
+        // button, which now runs the EiF client.
+        const wanted = savedVersion === 'nge' ? 'eif' : savedVersion;
+        const radio = gameVersionRadios.find(r => r.value === wanted);
         if (radio) radio.checked = true;
       }
 
@@ -192,18 +195,21 @@ window.addEventListener('DOMContentLoaded', () => {
   // Install Directory / Game Version
   // ------------------------------
   function versionLabel(version) {
-    return version === 'nge' ? 'CU' : (version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU');
+    if (version === 'nge') return 'GiF';
+    // The GiF button now installs the EiF client, so that channel is labelled GiF.
+    if (version === 'eif') return 'GiF';
+    return version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU';
   }
 
   function versionValidExe(version, lowerName) {
-    return version === 'nge'
-      ? (lowerName === 'swgclient_r.exe' || lowerName === 'galaxies reborn precu.exe')
-      : lowerName === 'swgemu.exe';
+    // GiF ships the Pre-CU client too, so every channel launches SWGEmu.exe.
+    return lowerName === 'swgemu.exe';
   }
 
   function versionExeSettingKey(version) {
-    return version === 'nge' ? 'ngeExecutable'
-      : (version === 'precu-testcenter' ? 'precuTestCenterExecutable' : 'precuExecutable');
+    if (version === 'nge') return 'ngeExecutable';
+    if (version === 'eif') return 'eifExecutable';
+    return version === 'precu-testcenter' ? 'precuTestCenterExecutable' : 'precuExecutable';
   }
 
   async function loadVersionInstallDir() {
@@ -338,11 +344,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const valid = versionValidExe(gameVersion, pickedName);
 
         if (!valid) {
-          updateStatus(
-            gameVersion === 'nge'
-              ? 'Please select SwgClient_r.exe for the CU client.'
-              : 'Please select SWGEmu.exe for the PRE-CU client.'
-          );
+          updateStatus(`Please select SWGEmu.exe for the ${versionLabel(gameVersion)} client.`);
           return;
         }
 
@@ -444,7 +446,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
       try {
         updateStatus('Opening the client setup utility...');
-        const result = await ipcRenderer.invoke('launch-client-setup', { dir: installDir });
+        const result = await ipcRenderer.invoke('launch-client-setup', { dir: installDir, version: gameVersion });
 
         if (result && result.success) {
           const name = path.basename(result.setup || 'SwgClientSetup_r.exe');
@@ -549,15 +551,15 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function versionManifestUrl(version) {
-    return version === 'nge'
-      ? 'https://swg-ghosts.online/tre/cu/required-files.json'
-      : 'https://swg-ghosts.online/tre/required-files.json';
+    if (version === 'nge') return 'https://swg-ghosts.online/tre/cu/required-files.json';
+    if (version === 'eif') return 'https://swg-ghosts.online/tre/eif/required-files.json';
+    return 'https://swg-ghosts.online/tre/required-files.json';
   }
 
   function versionFileUrl(version) {
-    return version === 'nge'
-      ? 'https://swg-ghosts.online/tre/cu/'
-      : 'https://swg-ghosts.online/tre/';
+    if (version === 'nge') return 'https://swg-ghosts.online/tre/cu/';
+    if (version === 'eif') return 'https://swg-ghosts.online/tre/eif/';
+    return 'https://swg-ghosts.online/tre/';
   }
 
   async function loadPatchFiles() {
@@ -566,12 +568,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const normalFiles = selectedFiles.filter(file => !isSharedUiFile(file));
 
-    // Shared UI/scaling files are hosted in the shared /tre/ tree. For CU,
-    // pull those entries from the shared PRE-CU manifest and apply them to the
-    // currently selected CU installation.
-    const sharedFiles = gameVersion === 'precu' || gameVersion === 'precu-testcenter'
-      ? selectedFiles
-      : await ipcRenderer.invoke('load-required-files', 'precu');
+    // Shared UI/scaling files are hosted in the shared /tre/ tree. Only GiF
+    // borrows them: EiF ships its own complete, already-branded ui/ tree, so
+    // pulling the shared one would overwrite it.
+    const sharedFiles = gameVersion === 'nge'
+      ? await ipcRenderer.invoke('load-required-files', 'precu')
+      : selectedFiles;
     const sharedUiFiles = Array.isArray(sharedFiles)
       ? sharedFiles.filter(isSharedUiFile)
       : [];
