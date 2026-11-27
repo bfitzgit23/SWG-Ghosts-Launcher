@@ -10,11 +10,27 @@ const https = require('https');
 const crypto = require('crypto');
 const { downloadFileFromUrl, HTTP_HEADERS } = require('./download');
 const { ensureOptionsCfg, primaryDisplaySize } = require('./machine-state');
-const { createUpdaterController } = require('./updater');
+const { createUpdaterController, getInstallerPath } = require('./updater');
+const { startRelaunchWatcher } = require('./relaunch');
 
 // ---- DPI / scaling hard-fix (must be set BEFORE app ready) ----
 app.commandLine.appendSwitch('high-dpi-support', '1');
 app.commandLine.appendSwitch('force-device-scale-factor', '1');
+
+// One launcher window only. After an update the installer may start the app while
+// our relaunch watchdog starts it too; the loser hands focus over and exits.
+const singleInstanceLock = app.requestSingleInstanceLock();
+
+if (!singleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
 
 let mainWindow;
 
@@ -1308,7 +1324,19 @@ function configureAutoUpdater() {
     },
     noInstall: process.env.GHOSTS_UPDATER_NO_INSTALL === '1',
     stallMs: Number(process.env.GHOSTS_UPDATER_STALL_MS) || undefined,
-    checkTimeoutMs: Number(process.env.GHOSTS_UPDATER_CHECK_TIMEOUT_MS) || undefined
+    checkTimeoutMs: Number(process.env.GHOSTS_UPDATER_CHECK_TIMEOUT_MS) || undefined,
+    // Start the launcher again once the installer finishes — the installer's own
+    // relaunch left the launcher closed for players.
+    armRelaunch: (installerPath) => startRelaunchWatcher({
+      execPath: process.execPath,
+      appExe: process.execPath,
+      installerPath: installerPath || getInstallerPath(autoUpdater),
+      logPath: path.join(app.getPath('userData'), 'logs', 'launcher-update-install.log'),
+      log: (message) => {
+        console.log(message);
+        appendLauncherDiagnostic(message.replace(/^\[updater\]\s*/, 'Updater: '));
+      }
+    })
   });
 
   updaterController.init();
@@ -1357,6 +1385,8 @@ ipcMain.handle('launcher-update-state', () => {
 });
 
 app.whenReady().then(() => {
+  if (!singleInstanceLock) return;
+
   createWindow();
   configureAutoUpdater();
 

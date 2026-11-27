@@ -140,11 +140,27 @@ function clearStalePartials(autoUpdater, log) {
   }
 }
 
+// The installer electron-updater downloaded and verified. Needed by the relaunch
+// watchdog, which has to know which process is doing the installing.
+function getInstallerPath(autoUpdater) {
+  try {
+    const helper = autoUpdater.downloadedUpdateHelper;
+    if (!helper) return null;
+    return helper.file || helper.packageFile || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function createUpdaterController(options) {
   const autoUpdater = options.autoUpdater;
   if (!autoUpdater) throw new Error('createUpdaterController requires an autoUpdater');
 
   const feeds = options.feeds || buildFeeds();
+  // Optional: arms a watchdog that starts the launcher again once the installer
+  // finishes. Returns false when it cannot be armed, in which case the install
+  // still goes ahead and relies on the installer's own relaunch flag.
+  const armRelaunch = options.armRelaunch || null;
   const log = options.log || (() => {});
   const onState = options.onState || (() => {});
   const stallMs = options.stallMs > 0 ? options.stallMs : DEFAULT_STALL_MS;
@@ -379,6 +395,23 @@ function createUpdaterController(options) {
       return false;
     }
     log(`[updater] installing ${state.version} silently and restarting the launcher`);
+
+    // The installer's own relaunch is not reliable in the field (the launcher
+    // closed and stayed closed after an update), so arm a watchdog that brings it
+    // back as soon as the installer is done. It is started before the quit below
+    // because this process is the one it waits on.
+    const installerPath = getInstallerPath(autoUpdater);
+
+    if (armRelaunch) {
+      let armed = false;
+      try {
+        armed = armRelaunch(installerPath) !== false;
+      } catch (error) {
+        log(`[updater] relaunch watchdog threw: ${describeError(error)}`);
+      }
+      if (!armed) log('[updater] relaunch watchdog unavailable; relying on the installer to restart the launcher');
+    }
+
     // Silent install (no NSIS wizard) and relaunch afterwards.
     autoUpdater.quitAndInstall(true, true);
     return true;
@@ -400,6 +433,7 @@ module.exports = {
   buildFeeds,
   createUpdaterController,
   forceFullDownloads,
+  getInstallerPath,
   clearStalePartials,
   describeError,
   DEFAULT_STALL_MS,

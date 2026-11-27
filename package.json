@@ -1,6 +1,6 @@
 {
   "name": "ghosts-launcher",
-  "version": "2.2.19",
+  "version": "2.2.21",
   "description": "SWG Ghosts Launcher",
   "main": "main.js",
   "author": "Ghosts_Dev",
@@ -89,7 +89,8 @@
         "AppImage"
       ],
       "category": "Game",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "artifactName": "Ghosts-Launcher-${version}-x86_64.AppImage"
     },
     "mac": {
       "target": [

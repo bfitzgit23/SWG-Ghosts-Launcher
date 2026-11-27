@@ -306,6 +306,49 @@ async function main() {
     assert.strictEqual(b.phase, 'current');
   });
 
+  // 9. The relaunch watchdog is armed before the install starts, and a watchdog
+  //    that cannot be armed never blocks the install (the launcher must still
+  //    update even if starting it again is impossible).
+  await test('relaunch watchdog is armed before the install', async () => {
+    const order = [];
+    const armed = makeController(
+      {
+        check: offers('9.9.9'),
+        download: downloads('9.9.9'),
+        downloadedUpdateHelper: { file: '/tmp/Ghosts Launcher Setup 9.9.9.exe' },
+      },
+      {
+        armRelaunch: (installerPath) => {
+          order.push(`arm:${installerPath}`);
+          return true;
+        },
+      }
+    );
+    await armed.controller.runCheck('test');
+    armed.autoUpdater.quitAndInstall = (silent, force) => order.push(`install:${silent}:${force}`);
+    assert.strictEqual(armed.controller.installNow(), true);
+    assert.deepStrictEqual(order, [
+      'arm:/tmp/Ghosts Launcher Setup 9.9.9.exe',
+      'install:true:true',
+    ]);
+
+    const refusing = makeController(
+      {
+        check: offers('9.9.9'),
+        download: downloads('9.9.9'),
+        downloadedUpdateHelper: { file: '/tmp/Ghosts Launcher Setup 9.9.9.exe' },
+      },
+      {
+        armRelaunch: () => {
+          throw new Error('spawn failed');
+        },
+      }
+    );
+    await refusing.controller.runCheck('test');
+    assert.strictEqual(refusing.controller.installNow(), true);
+    assert.deepStrictEqual(refusing.autoUpdater.installs, [[true, true]]);
+  });
+
   assert.strictEqual(DEFAULT_STALL_MS, 60000);
 
   console.log(`updater selftest: ${passed.length} passed, ${failures.length} failed`);
