@@ -153,8 +153,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
       const savedVersion = await ipcRenderer.invoke('get-game-version');
       if (savedVersion) {
-        // A profile saved on the old GiF channel (nge) comes back on the GiF
-        // button, which now runs the EiF client.
+        // A profile saved on the old GiF channel (nge) comes back on the same
+        // button, which is now the NGE-HYBRID channel.
         const wanted = savedVersion === 'nge' ? 'eif' : savedVersion;
         const radio = gameVersionRadios.find(r => r.value === wanted);
         if (radio) radio.checked = true;
@@ -195,14 +195,15 @@ window.addEventListener('DOMContentLoaded', () => {
   // Install Directory / Game Version
   // ------------------------------
   function versionLabel(version) {
-    if (version === 'nge') return 'GiF';
-    // The GiF button now installs the EiF client, so that channel is labelled GiF.
-    if (version === 'eif') return 'GiF';
+    if (version === 'nge') return 'NGE-HYBRID';
+    // The NGE-HYBRID button installs the NGE client (SwgClient_r.exe).
+    if (version === 'eif') return 'NGE-HYBRID';
     return version === 'precu-testcenter' ? 'PRE-CU TEST CENTER' : 'PRE-CU';
   }
 
   function versionValidExe(version, lowerName) {
-    // GiF ships the Pre-CU client too, so every channel launches SWGEmu.exe.
+    // NGE-HYBRID launches the NGE client; the Pre-CU channels launch SWGEmu.exe.
+    if (version === 'eif' || version === 'nge') return lowerName === 'swgclient_r.exe';
     return lowerName === 'swgemu.exe';
   }
 
@@ -344,7 +345,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const valid = versionValidExe(gameVersion, pickedName);
 
         if (!valid) {
-          updateStatus(`Please select SWGEmu.exe for the ${versionLabel(gameVersion)} client.`);
+          updateStatus(`Please select ${gameVersion === 'eif' ? 'SwgClient_r.exe' : 'SWGEmu.exe'} for the ${versionLabel(gameVersion)} client.`);
           return;
         }
 
@@ -552,13 +553,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function versionManifestUrl(version) {
     if (version === 'nge') return 'https://swg-ghosts.online/tre/cu/required-files.json';
-    if (version === 'eif') return 'https://swg-ghosts.online/tre/eif/required-files.json';
+    if (version === 'eif') return 'https://swg-ghosts.online/tre/nge/required-files.json';
     return 'https://swg-ghosts.online/tre/required-files.json';
   }
 
   function versionFileUrl(version) {
     if (version === 'nge') return 'https://swg-ghosts.online/tre/cu/';
-    if (version === 'eif') return 'https://swg-ghosts.online/tre/eif/';
+    if (version === 'eif') return 'https://swg-ghosts.online/tre/nge/';
     return 'https://swg-ghosts.online/tre/';
   }
 
@@ -568,9 +569,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const normalFiles = selectedFiles.filter(file => !isSharedUiFile(file));
 
-    // Shared UI/scaling files are hosted in the shared /tre/ tree. Only GiF
-    // borrows them: EiF ships its own complete, already-branded ui/ tree, so
-    // pulling the shared one would overwrite it.
+    // Shared UI/scaling files are hosted in the shared /tre/ tree. Only the
+    // legacy 'nge' value borrows them: the NGE-HYBRID channel ships its own
+    // complete ui/ tree, so pulling the shared one would overwrite it.
     const sharedFiles = gameVersion === 'nge'
       ? await ipcRenderer.invoke('load-required-files', 'precu')
       : selectedFiles;

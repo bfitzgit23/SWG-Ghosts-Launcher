@@ -37,7 +37,8 @@ let mainWindow;
 // Keep ONE source of truth for your patch base
 const PRECU_BASE_URL = 'https://swg-ghosts.online/tre/';
 const CU_BASE_URL = 'https://swg-ghosts.online/tre/cu/';
-const EIF_BASE_URL = 'https://swg-ghosts.online/tre/eif/';
+// NGE-HYBRID channel: the NGE client (SwgClient_r.exe + SwgClientSetup_r.exe).
+const EIF_BASE_URL = 'https://swg-ghosts.online/tre/nge/';
 const PRECU_TESTCENTER_LOGIN_IP = '212.28.185.14';
 const SWGEmu_EXE_FILENAME = 'SWGEmu.exe';
 const SWGEmu_EXE_ALT_FILENAMES = ['SWGEmu.exe', 'SWGEmu.exe.patched', 'swgemu.exe'];
@@ -582,9 +583,11 @@ ipcMain.handle('check-installation', async (event, { version = 'precu', dir } = 
       return { ok: false, error: `Installation directory does not exist: ${rootDir}` };
     }
 
-    // Every channel now runs the Pre-CU SWGEmu.exe client, the GiF channel
-    // (formerly CU) included, so it is looked up exactly like PRE-CU.
-    const names = ['SWGEmu.exe', 'swgemu.exe', 'SWGEMU.exe'];
+    // Pre-CU channels run SWGEmu.exe; the NGE-HYBRID channel ships the NGE
+    // client, whose executable is SwgClient_r.exe.
+    const names = version === 'eif'
+      ? ['SwgClient_r.exe', 'swgclient_r.exe', 'SWGCLIENT_R.exe']
+      : ['SWGEmu.exe', 'swgemu.exe', 'SWGEMU.exe'];
 
     const wanted = new Set(names.map(n => n.toLowerCase()));
     const skipDirs = new Set([
@@ -640,7 +643,7 @@ ipcMain.handle('check-installation', async (event, { version = 'precu', dir } = 
       }
     }
 
-    const expected = 'SWGEmu.exe';
+    const expected = version === 'eif' ? 'SwgClient_r.exe' : 'SWGEmu.exe';
     return {
       ok: !!exePath,
       version,
@@ -1041,8 +1044,8 @@ const CLIENT_SETUP_NAMES = [
   'SwgClientSetup_r.exe', 'SWGClientSetup_r.exe', 'swgclientsetup_r.exe',
   'SwgClientSetup.exe', 'SWGClientSetup.exe'
 ];
-// The GiF channel's Pre-CU install keeps the client's setup dialog next to
-// SWGEmu.exe as swgemu_setup.exe, so that build is looked up first for it.
+// Pre-CU builds keep the client's setup dialog next to SWGEmu.exe as
+// swgemu_setup.exe; it is the fallback when the NGE setup tool is absent.
 const GIF_SETUP_NAMES = [
   'swgemu_setup.exe', 'SWGEmu_Setup.exe', 'SWGEmuSetup.exe'
 ];
@@ -1058,9 +1061,9 @@ ipcMain.handle('launch-client-setup', async (event, { dir, version = 'precu' } =
       return { success: false, error: `Installation directory does not exist: ${rootDir}` };
     }
 
-    const setupNames = (version === 'nge' || version === 'eif')
-      ? [...GIF_SETUP_NAMES, ...CLIENT_SETUP_NAMES]
-      : [...CLIENT_SETUP_NAMES, ...GIF_SETUP_NAMES];
+    // The NGE-HYBRID client's own setup utility is SwgClientSetup_r.exe; the
+    // Pre-CU client uses swgemu_setup.exe, so that stays as the fallback.
+    const setupNames = [...CLIENT_SETUP_NAMES, ...GIF_SETUP_NAMES];
     const wanted = new Set(setupNames.map(n => n.toLowerCase()));
     const skipDirs = new Set(['node_modules', '.git', 'logs', 'cache', 'caches', 'gpuCache', 'crashpad', 'crashes']);
 
